@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DashboardHeader from "@/components/DashboardHeader";
 import { Search, Download, Eye } from "lucide-react";
+import Link from "next/link";
 
 interface Call {
   id: string;
@@ -63,12 +64,10 @@ export default function CallsTranscriptPage() {
 
   const handleViewTranscript = (id: string) => {
     console.log("View transcript for call:", id);
-    // Add your view transcript logic here
   };
 
   const handleExport = () => {
     console.log("Exporting calls data...");
-    // Add your export logic here
   };
 
   const filteredCalls = calls.filter(
@@ -178,13 +177,13 @@ export default function CallsTranscriptPage() {
                       </span>
                     </td>
                     <td className="py-4 px-6">
-                      <button
-                        onClick={() => handleViewTranscript(call.id)}
+                      <Link
+                        href={`calls/${call.id}`}
                         className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                         title="View Transcript"
                       >
                         <Eye className="w-4 h-4" />
-                      </button>
+                      </Link>
                     </td>
                   </tr>
                 ))}
