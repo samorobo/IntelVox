@@ -50,7 +50,6 @@ export default function TenantManagementPage() {
     }
   }, [message]);
 
-  // Fetch tenants from backend
   useEffect(() => {
     const fetchTenants = async () => {
       try {
@@ -151,7 +150,6 @@ export default function TenantManagementPage() {
     <>
       <DashboardHeader title="Tenant Management" />
 
-      {/* ✅ Message bar */}
       {message && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-md text-sm font-medium transition-all duration-300 ${
@@ -283,7 +281,6 @@ export default function TenantManagementPage() {
         </div>
       </div>
 
-      {/* ✅ Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div

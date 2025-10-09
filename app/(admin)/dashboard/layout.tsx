@@ -45,7 +45,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <span className="text-white font-bold text-sm">I</span>
               </div>
               <span className="text-xl font-semibold text-gray-900 dark:text-white">
-                Intelbox.ai
+                Intelvox.ai
               </span>
             </div>
           </div>

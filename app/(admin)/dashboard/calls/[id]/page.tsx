@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import DashboardHeader from "@/components/DashboardHeader";
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
   Volume2,
   Play,
   Pause,
+  Search,
 } from "lucide-react";
 
 interface CallDetail {
@@ -37,8 +38,18 @@ interface CallDetail {
   outcome: string;
 }
 
+interface TranscriptMessage {
+  id: number;
+  speaker: "customer" | "agent";
+  text: string;
+  timestamp: string;
+  date: string;
+  highlightedText?: string;
+}
+
 export default function CallDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const callId = params?.id as string;
 
   const [activeTab, setActiveTab] = useState<"details" | "transcript">(
@@ -48,6 +59,48 @@ export default function CallDetailPage() {
   const [currentTime, setCurrentTime] = useState("12:02");
   const [totalTime] = useState("23:00");
   const [progress, setProgress] = useState(52);
+  const [searchTerm, setSearchTerm] = useState("");
+  const transcriptMessages: TranscriptMessage[] = [
+    {
+      id: 1,
+      speaker: "customer",
+      text: "Hello, I'm calling about my recent order that hasn't arrived yet.",
+      timestamp: "00:12",
+      date: "Sep 15, 2025",
+    },
+    {
+      id: 2,
+      speaker: "agent",
+      text: "I can help you with that. Could you please provide your order number?",
+      timestamp: "00:25",
+      date: "Sep 15, 2025",
+    },
+    {
+      id: 3,
+      speaker: "customer",
+      text: "Yes, it's ORD-7842. The delivery was supposed to be yesterday.",
+      timestamp: "00:38",
+      date: "Sep 15, 2025",
+    },
+    {
+      id: 4,
+      speaker: "agent",
+      text: "Thank you. I can see your order is currently at our distribution center. It should be delivered by tomorrow.",
+      timestamp: "01:15",
+      date: "Sep 15, 2025",
+    },
+    {
+      id: 5,
+      speaker: "customer",
+      text: "That's good to hear. I was getting worried because I need it for an important event.",
+      timestamp: "01:45",
+      date: "Sep 15, 2025",
+    },
+  ];
+
+  const filteredMessages = transcriptMessages.filter((message) =>
+    message.text.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   useEffect(() => {
     if (callId) {
@@ -84,7 +137,15 @@ export default function CallDetailPage() {
   };
 
   const handleBack = () => {
-    console.log("Navigate back");
+    router.back();
+  };
+
+  const handleDownloadRecording = () => {
+    console.log("Download recording");
+  };
+
+  const handleDownloadTranscript = () => {
+    console.log("Download transcript");
   };
 
   return (
@@ -134,165 +195,201 @@ export default function CallDetailPage() {
                     <h3 className="text-base font-semibold text-gray-900 dark:text-white">
                       Basic details
                     </h3>
-                    <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                    <button
+                      onClick={handleDownloadRecording}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
                       <Download className="w-4 h-4" />
                       Download Recording
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Phone className="w-6 h-6 text-blue-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Call Direction
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                          <Phone className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                         </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.callDirection}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Call direction
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.callDirection}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                          <MessageSquare className="w-5 h-5 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Call outcome
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.outcome}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                          <User className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Human handoff
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.humanHandoff}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                          <MessageSquare className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Sentiment
+                          </div>
+                          <div className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">
+                            {callDetail.sentiment}
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Hash className="w-6 h-6 text-purple-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Call Outcome
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+                          <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                         </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.outcome}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Call date
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.date}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                          <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Call time
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.time}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg flex items-center justify-center">
+                          <Clock className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Call duration
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.duration}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-lg flex items-center justify-center">
+                          <User className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            AI Agent
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.aiAgent}
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <User className="w-6 h-6 text-green-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Human Handoff
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-pink-100 dark:bg-pink-900/30 rounded-lg flex items-center justify-center">
+                          <User className="w-5 h-5 text-pink-600 dark:text-pink-400" />
                         </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.humanHandoff}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Customer name
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.agentName}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                          <Phone className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Customer number
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate font-mono">
+                            {callDetail.phone}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center">
+                          <Volume2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Recording status
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.recordingStatus}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-lg flex items-center justify-center">
+                          <Hash className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Call status
+                          </div>
+                          <div className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">
+                            {callDetail.callStatus}
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <MessageSquare className="w-6 h-6 text-red-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Sentiment
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-violet-100 dark:bg-violet-900/30 rounded-lg flex items-center justify-center">
+                          <Building className="w-5 h-5 text-violet-600 dark:text-violet-400" />
                         </div>
-                        <div className="text-base font-medium text-red-600 dark:text-red-400">
-                          {callDetail.sentiment}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Calendar className="w-6 h-6 text-yellow-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Call Date
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.date}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Clock className="w-6 h-6 text-indigo-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Call Time
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.time}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Clock className="w-6 h-6 text-teal-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Call Duration
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.duration}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <User className="w-6 h-6 text-pink-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          AI Agent
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.aiAgent}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <User className="w-6 h-6 text-blue-400 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Customer Name
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.name}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Phone className="w-6 h-6 text-emerald-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Customer Number
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white font-mono">
-                          {callDetail.phone}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Volume2 className="w-6 h-6 text-orange-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Recording Status
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.recordingStatus}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <Hash className="w-6 h-6 text-violet-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Outcome
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.outcome}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm col-span-1 sm:col-span-2 lg:col-span-4">
-                      <Building className="w-6 h-6 text-cyan-500 mt-1" />
-                      <div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Tenant Name
-                        </div>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {callDetail.tenant}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Tenant name
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {callDetail.tenant}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -333,7 +430,10 @@ export default function CallDetailPage() {
                         <Play className="w-5 h-5 text-white ml-0.5" />
                       )}
                     </button>
-                    <button className="text-gray-400 hover:text-white transition-colors">
+                    <button
+                      onClick={handleDownloadRecording}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
                       <Download className="w-5 h-5" />
                     </button>
                   </div>
@@ -342,9 +442,111 @@ export default function CallDetailPage() {
             )}
 
             {activeTab === "transcript" && (
-              <div className="py-8 text-center text-gray-500 dark:text-gray-400">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Transcript content will be displayed here</p>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                    Transcript details
+                  </h3>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleDownloadTranscript}
+                      className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Download className="w-5 h-5" />
+                    </button>
+                    <div className="relative w-64">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search transcript..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-sm rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {filteredMessages.length > 0 ? (
+                    filteredMessages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`p-4 rounded-lg border transition-all ${
+                          message.speaker === "customer"
+                            ? "bg-gray-800 dark:bg-gray-900 border-gray-700 dark:border-gray-800"
+                            : "bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 ${
+                              message.speaker === "customer"
+                                ? "bg-blue-600/20"
+                                : "bg-green-100 dark:bg-green-900/30"
+                            }`}
+                          >
+                            <User
+                              className={`w-4 h-4 ${
+                                message.speaker === "customer"
+                                  ? "text-blue-400"
+                                  : "text-green-600 dark:text-green-400"
+                              }`}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <div
+                                className={`text-sm font-semibold ${
+                                  message.speaker === "customer"
+                                    ? "text-blue-300"
+                                    : "text-gray-900 dark:text-white"
+                                }`}
+                              >
+                                {message.speaker === "customer"
+                                  ? "Customer (Virtual Assistant)"
+                                  : "Agent"}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {message.date}
+                                </span>
+                                <span className="text-xs text-gray-400 dark:text-gray-500">
+                                  •
+                                </span>
+                                <span
+                                  className={`text-xs ${
+                                    message.speaker === "customer"
+                                      ? "text-gray-400"
+                                      : "text-gray-500 dark:text-gray-400"
+                                  }`}
+                                >
+                                  {message.timestamp}
+                                </span>
+                              </div>
+                            </div>
+                            <p
+                              className={`text-sm mb-2 leading-relaxed ${
+                                message.speaker === "customer"
+                                  ? "text-gray-300"
+                                  : "text-gray-700 dark:text-gray-300"
+                              }`}
+                            >
+                              {message.text}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-400 opacity-50" />
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No messages found matching your search.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -2,11 +2,13 @@
 
 import { useState, KeyboardEvent, ChangeEvent } from "react";
 import { Layers, ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function AuthFlow() {
+  const router = useRouter();
   const [step, setStep] = useState<"email" | "otp">("email");
   const [email, setEmail] = useState<string>("");
-  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState<string[]>(["", "", "", ""]);
 
   const handleEmailSubmit = (): void => {
     if (email && email.includes("@")) {
@@ -25,11 +27,17 @@ export default function AuthFlow() {
     newOtp[index] = value;
     setOtp(newOtp);
 
-    if (value && index < 5) {
+    if (value && index < 3) {
       const nextInput = document.getElementById(
         `otp-${index + 1}`
       ) as HTMLInputElement;
       if (nextInput) nextInput.focus();
+    }
+
+    // Auto-submit when OTP is complete and matches 2468
+    const currentOtp = [...newOtp].join("");
+    if (currentOtp.length === 4 && currentOtp === "2468") {
+      handleOtpSubmit();
     }
   };
 
@@ -47,14 +55,19 @@ export default function AuthFlow() {
 
   const handleOtpSubmit = (): void => {
     const otpValue = otp.join("");
-    if (otpValue.length === 6) {
+    if (otpValue.length === 4) {
       console.log("OTP submitted:", otpValue);
+      if (otpValue === "2468") {
+        router.push("/dashboard");
+      } else {
+        console.log("Invalid OTP");
+      }
     }
   };
 
   const handleBackToEmail = (): void => {
     setStep("email");
-    setOtp(["", "", "", "", "", ""]);
+    setOtp(["", "", "", ""]);
   };
 
   return (
@@ -127,9 +140,13 @@ export default function AuthFlow() {
               Enter verification code
             </h1>
             <p className="text-gray-400 text-center mb-8">
-              We've sent a 6-digit code to
+              We've sent a 4-digit code to
               <br />
               <span className="text-white">{email}</span>
+              <br />
+              <span className="text-blue-400 text-sm mt-2 block">
+                Use static OTP: <strong>2468</strong>
+              </span>
             </p>
 
             <div className="flex gap-3 justify-center mb-6">
@@ -154,7 +171,7 @@ export default function AuthFlow() {
 
             <button
               onClick={handleOtpSubmit}
-              disabled={otp.join("").length !== 6}
+              disabled={otp.join("").length !== 4}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200"
             >
               Proceed
