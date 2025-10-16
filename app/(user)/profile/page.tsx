@@ -35,7 +35,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <DashboardHeader title="Admin Dashboard" />
+      <DashboardHeader title="User Dashboard" />
       <div className="p-8">
         <div className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

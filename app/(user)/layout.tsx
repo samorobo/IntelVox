@@ -1,8 +1,8 @@
 "use client";
 
+import "../globals.css";
 import { ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
-import "../../globals.css";
 import {
   LayoutDashboard,
   Users,
@@ -13,40 +13,45 @@ import {
   Sun,
   Moon,
   PhoneCall,
+  Bot,
+  Contact,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
-
 const navItems = [
   {
-    href: "/dashboard",
+    href: "/profile",
     label: "Dashboard",
     icon: LayoutDashboard,
   },
   {
-    href: "/dashboard/tenants",
-    label: "Tenant management",
-    icon: Users,
+    href: "/ai-agents",
+    label: "AI Agents",
+    icon: Bot,
   },
   {
-    href: "/dashboard/calls",
-    label: "Calls & transcripts",
+    href: "/contact-leads",
+    label: "Contacts & Leads",
+    icon: Contact,
+  },
+  {
+    href: "/calls",
+    label: "Calls & Transcript",
     icon: PhoneCall,
   },
   {
-    href: "/dashboard/pricing",
-    label: "Pricings and plans",
-    icon: DollarSign,
+    href: "/billing",
+    label: "Billings & Usage",
+    icon: CreditCard,
   },
   {
     href: "/team",
-    label: "Team & roles",
-    icon: UserCircle,
+    label: "Team & Roles",
+    icon: Users,
   },
 ];
-
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [darkMode, setDarkMode] = useState(false);
 

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardHeader from "@/components/DashboardHeader";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus, X, CheckCircle, XCircle, Info } from "lucide-react";
+import axiosClient from "@/lib/axiosClient";
 
 interface Plan {
-  id: string;
+  _id?: string;
   name: string;
   description: string;
   isActive: boolean;
@@ -23,106 +24,290 @@ interface Plan {
   totalSubscribers: number;
 }
 
+interface Notification {
+  id: string;
+  message: string;
+  type: "success" | "error" | "info";
+  timestamp: number;
+}
+
 export default function SubscriptionPlansPage() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
     "monthly"
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([
-    {
-      id: "starter",
-      name: "Starter",
-      description:
-        "Perfect for individuals and small teams just getting started",
-      isActive: true,
-      billing: {
-        monthly: { price: "Free" },
-        yearly: { price: "Free" },
-      },
-      features: [
-        "1 AI agent",
-        "2,000 minutes / month",
-        "Basic analytics",
-        "Email support",
-      ],
-      totalSubscribers: 290,
-    },
-    {
-      id: "business",
-      name: "Business",
-      description: "Designed for growing teams needing more scale and features",
-      isActive: true,
-      billing: {
-        monthly: {
-          price: "$89",
-          originalPrice: "$199",
-        },
-        yearly: {
-          price: "$900",
-          originalPrice: "$2300",
-        },
-      },
-      features: [
-        "5 AI agents",
-        "5,000 minutes / month",
-        "Advanced analytics & call recording",
-        "Priority support",
-      ],
-      totalSubscribers: 290,
-    },
-    {
-      id: "enterprise",
-      name: "Enterprise",
-      description: "Tailored for large organizations with advanced needs",
-      isActive: true,
-      billing: {
-        monthly: {
-          price: "$199",
-          originalPrice: "$299",
-        },
-        yearly: {
-          price: "$1800",
-          originalPrice: "$2800",
-        },
-      },
-      features: [
-        "Unlimited AI agents",
-        "Unlimited minutes / month",
-        "Advanced analytics & call recording",
-        "Custom integrations & SLA",
-      ],
-      totalSubscribers: 290,
-    },
-  ]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    monthlyPrice: "",
+    monthlyOriginalPrice: "",
+    yearlyPrice: "",
+    yearlyOriginalPrice: "",
+    features: "",
+  });
 
-  const handleTogglePlan = (planId: string) => {
-    setPlans((prevPlans) =>
-      prevPlans.map((plan) =>
-        plan.id === planId ? { ...plan, isActive: !plan.isActive } : plan
-      )
+  // Fetch plans from backend
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const addNotification = (
+    message: string,
+    type: "success" | "error" | "info"
+  ) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newNotification: Notification = {
+      id,
+      message,
+      type,
+      timestamp: Date.now(),
+    };
+
+    setNotifications((prev) => [newNotification, ...prev]);
+
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      removeNotification(id);
+    }, 5000);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications((prev) =>
+      prev.filter((notification) => notification.id !== id)
     );
   };
 
-  const handleOpenModal = (plan: Plan) => {
+  const fetchPlans = async () => {
+    setLoading(true);
+    try {
+      const response = await axiosClient.get("/plans");
+      setPlans(response.data);
+    } catch (err: any) {
+      addNotification(
+        err.response?.data?.error || "Failed to fetch plans",
+        "error"
+      );
+      console.error("Error fetching plans:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatPrice = (price: string) => {
+    if (price.toLowerCase() === "free" || price === "0") {
+      return "Free";
+    }
+    // Add dollar sign if it's a number (with optional decimal)
+    if (/^\d+(\.\d{1,2})?$/.test(price)) {
+      return `$${price}`;
+    }
+    // If it already has a dollar sign or other format, return as is
+    return price;
+  };
+
+  const handleTogglePlan = async (planId: string) => {
+    try {
+      const plan = plans.find((p) => p._id === planId);
+      if (!plan) return;
+
+      const updatedPlan = { ...plan, isActive: !plan.isActive };
+      await axiosClient.patch(`/plans/${planId}`, {
+        isActive: updatedPlan.isActive,
+      });
+
+      setPlans((prevPlans) =>
+        prevPlans.map((plan) =>
+          plan._id === planId ? { ...plan, isActive: !plan.isActive } : plan
+        )
+      );
+
+      addNotification(
+        `"${plan.name}" plan ${
+          updatedPlan.isActive ? "enabled" : "disabled"
+        } successfully`,
+        "success"
+      );
+    } catch (err: any) {
+      addNotification(
+        err.response?.data?.error || "Failed to update plan status",
+        "error"
+      );
+      console.error("Error updating plan:", err);
+    }
+  };
+
+  const handleOpenModal = (plan: Plan | null) => {
     setSelectedPlan(plan);
+
+    if (plan) {
+      setFormData({
+        name: plan.name,
+        description: plan.description,
+        monthlyPrice: plan.billing.monthly.price.replace("$", ""),
+        monthlyOriginalPrice:
+          plan.billing.monthly.originalPrice?.replace("$", "") || "",
+        yearlyPrice: plan.billing.yearly.price.replace("$", ""),
+        yearlyOriginalPrice:
+          plan.billing.yearly.originalPrice?.replace("$", "") || "",
+        features: plan.features.join("\n"),
+      });
+    } else {
+      setFormData({
+        name: "",
+        description: "",
+        monthlyPrice: "",
+        monthlyOriginalPrice: "",
+        yearlyPrice: "",
+        yearlyOriginalPrice: "",
+        features: "",
+      });
+    }
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedPlan(null);
+    setFormData({
+      name: "",
+      description: "",
+      monthlyPrice: "",
+      monthlyOriginalPrice: "",
+      yearlyPrice: "",
+      yearlyOriginalPrice: "",
+      features: "",
+    });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Form submitted for plan:", selectedPlan);
-    handleCloseModal();
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  const isFormValid = () => {
+    return (
+      formData.name.trim() &&
+      formData.description.trim() &&
+      formData.monthlyPrice.trim() &&
+      formData.yearlyPrice.trim() &&
+      formData.features.trim()
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isFormValid()) return;
+
+    setSubmitLoading(true);
+
+    try {
+      const planData = {
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        isActive: true,
+        billing: {
+          monthly: {
+            price: formatPrice(formData.monthlyPrice.trim()),
+            ...(formData.monthlyOriginalPrice.trim() && {
+              originalPrice: formatPrice(formData.monthlyOriginalPrice.trim()),
+            }),
+          },
+          yearly: {
+            price: formatPrice(formData.yearlyPrice.trim()),
+            ...(formData.yearlyOriginalPrice.trim() && {
+              originalPrice: formatPrice(formData.yearlyOriginalPrice.trim()),
+            }),
+          },
+        },
+        features: formData.features.split("\n").filter((f) => f.trim()),
+        totalSubscribers: 0,
+      };
+
+      if (selectedPlan?._id) {
+        // Update existing plan
+        await axiosClient.patch(`/plans/${selectedPlan._id}`, planData);
+        addNotification(
+          `"${planData.name}" plan updated successfully`,
+          "success"
+        );
+      } else {
+        // Create new plan
+        await axiosClient.post("/plans", planData);
+        addNotification(
+          `"${planData.name}" plan created successfully`,
+          "success"
+        );
+      }
+
+      await fetchPlans();
+      handleCloseModal();
+    } catch (err: any) {
+      addNotification(
+        err.response?.data?.error || "Failed to save plan",
+        "error"
+      );
+      console.error("Error saving plan:", err);
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <>
+        <DashboardHeader title="Subscription management" />
+        <div className="p-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500 dark:text-gray-400">
+              Loading plans...
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <DashboardHeader title="Subscription management" />
+
+      {/* Notification Container */}
+      <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+        {notifications.map((notification) => (
+          <div
+            key={notification.id}
+            className={`flex items-start gap-3 p-4 rounded-lg shadow-lg border backdrop-blur-sm transform transition-all duration-300 animate-in slide-in-from-right-full ${
+              notification.type === "success"
+                ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300"
+                : notification.type === "error"
+                ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300"
+                : "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300"
+            }`}
+          >
+            <div className="flex-shrink-0 mt-0.5">
+              {notification.type === "success" && (
+                <CheckCircle className="w-5 h-5" />
+              )}
+              {notification.type === "error" && <XCircle className="w-5 h-5" />}
+              {notification.type === "info" && <Info className="w-5 h-5" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{notification.message}</p>
+            </div>
+            <button
+              onClick={() => removeNotification(notification.id)}
+              className="flex-shrink-0 p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
       <div className="p-8">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -134,31 +319,19 @@ export default function SubscriptionPlansPage() {
             </p>
           </div>
           <button
-            onClick={() =>
-              handleOpenModal({
-                id: "new",
-                name: "New Plan",
-                description: "Create a new subscription plan",
-                isActive: true,
-                billing: {
-                  monthly: { price: "" },
-                  yearly: { price: "" },
-                },
-                features: [],
-                totalSubscribers: 0,
-              })
-            }
+            onClick={() => handleOpenModal(null)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             Create Plan
           </button>
         </div>
+
         <div className="grid grid-cols-3 gap-6">
           {plans.map((plan) => (
             <div
-              key={plan.id}
-              className="bg-gray-800 dark:bg-gray-900 rounded-lg border border-gray-700 dark:border-gray-800 overflow-hidden hover:border-gray-600 transition-colors"
+              key={plan._id}
+              className="bg-gray-800 dark:bg-gray-900 rounded-lg border border-gray-700 dark:border-gray-800 overflow-hidden hover:border-gray-600 transition-colors flex flex-col"
             >
               <div className="p-6 border-b border-gray-700 dark:border-gray-800">
                 <div className="flex items-center justify-between mb-4">
@@ -168,20 +341,26 @@ export default function SubscriptionPlansPage() {
                     </h3>
                     <p className="text-xs text-gray-400">{plan.description}</p>
                   </div>
-                  <button
-                    onClick={() => handleTogglePlan(plan.id)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                      plan.isActive ? "bg-blue-600" : "bg-gray-600"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                        plan.isActive ? "translate-x-6" : "translate-x-1"
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      onClick={() => handleTogglePlan(plan._id!)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                        plan.isActive ? "bg-blue-600" : "bg-gray-600"
                       }`}
-                    />
-                  </button>
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                          plan.isActive ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs text-gray-400">
+                      {plan.isActive ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
                 </div>
               </div>
+
               <div className="p-6 border-b border-gray-700 dark:border-gray-800 space-y-3">
                 <div
                   onClick={() => handleOpenModal(plan)}
@@ -194,12 +373,12 @@ export default function SubscriptionPlansPage() {
                       </p>
                       {plan.billing.monthly.originalPrice && (
                         <p className="text-xs text-gray-400 line-through">
-                          {plan.billing.monthly.originalPrice}
+                          {formatPrice(plan.billing.monthly.originalPrice)}
                         </p>
                       )}
                     </div>
                     <span className="text-xl font-bold text-white">
-                      {plan.billing.monthly.price}
+                      {formatPrice(plan.billing.monthly.price)}
                     </span>
                   </div>
                 </div>
@@ -214,17 +393,18 @@ export default function SubscriptionPlansPage() {
                       </p>
                       {plan.billing.yearly.originalPrice && (
                         <p className="text-xs text-gray-400 line-through">
-                          {plan.billing.yearly.originalPrice}
+                          {formatPrice(plan.billing.yearly.originalPrice)}
                         </p>
                       )}
                     </div>
                     <span className="text-xl font-bold text-white">
-                      {plan.billing.yearly.price}
+                      {formatPrice(plan.billing.yearly.price)}
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="p-6 space-y-3">
+
+              <div className="flex-1 p-6 space-y-3">
                 {plan.features.map((feature, idx) => (
                   <div key={idx} className="flex items-start gap-3">
                     <div className="flex-shrink-0 mt-0.5">
@@ -234,7 +414,9 @@ export default function SubscriptionPlansPage() {
                   </div>
                 ))}
               </div>
-              <div className="px-6 py-4 bg-gray-700/50 border-t border-gray-700 dark:border-gray-800">
+
+              {/* Always at the bottom */}
+              <div className="px-6 py-4 bg-gray-700/50 border-t border-gray-700 dark:border-gray-800 mt-auto">
                 <p className="text-xs text-gray-400">
                   Total subscribed tenants:{" "}
                   <span className="text-white font-semibold">
@@ -245,6 +427,7 @@ export default function SubscriptionPlansPage() {
             </div>
           ))}
         </div>
+
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
@@ -255,9 +438,9 @@ export default function SubscriptionPlansPage() {
             <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-auto transform transition-all duration-300 scale-100 opacity-100">
               <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {selectedPlan?.id === "new"
-                    ? "Create New Plan"
-                    : `Edit ${selectedPlan?.name} Plan`}
+                  {selectedPlan
+                    ? `Edit ${selectedPlan.name} Plan`
+                    : "Create New Plan"}
                 </h2>
                 <button
                   onClick={handleCloseModal}
@@ -270,128 +453,159 @@ export default function SubscriptionPlansPage() {
               <form onSubmit={handleSubmit} className="p-6 space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Plan Name
+                    Plan Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    defaultValue={selectedPlan?.name}
+                    value={formData.name}
+                    onChange={(e) => handleInputChange("name", e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter plan name"
+                    required
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Description
+                    Description <span className="text-red-500">*</span>
                   </label>
                   <textarea
-                    defaultValue={selectedPlan?.description}
+                    value={formData.description}
+                    onChange={(e) =>
+                      handleInputChange("description", e.target.value)
+                    }
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                     placeholder="Enter plan description"
+                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Monthly Price
+                      Monthly Price <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      defaultValue={selectedPlan?.billing.monthly.price}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="e.g., $89"
-                    />
-                    <input
-                      type="text"
-                      defaultValue={selectedPlan?.billing.monthly.originalPrice}
-                      className="w-full mt-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Original price (optional)"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                        $
+                      </span>
+                      <input
+                        type="text"
+                        value={formData.monthlyPrice}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "monthlyPrice",
+                            e.target.value.replace("$", "")
+                          )
+                        }
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="89 or Free"
+                        required
+                      />
+                    </div>
+                    <div className="relative mt-2">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                        $
+                      </span>
+                      <input
+                        type="text"
+                        value={formData.monthlyOriginalPrice}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "monthlyOriginalPrice",
+                            e.target.value.replace("$", "")
+                          )
+                        }
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Original price (optional)"
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Yearly Price
+                      Yearly Price <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      defaultValue={selectedPlan?.billing.yearly.price}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="e.g., $900"
-                    />
-                    <input
-                      type="text"
-                      defaultValue={selectedPlan?.billing.yearly.originalPrice}
-                      className="w-full mt-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Original price (optional)"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                        $
+                      </span>
+                      <input
+                        type="text"
+                        value={formData.yearlyPrice}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "yearlyPrice",
+                            e.target.value.replace("$", "")
+                          )
+                        }
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="900 or Free"
+                        required
+                      />
+                    </div>
+                    <div className="relative mt-2">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                        $
+                      </span>
+                      <input
+                        type="text"
+                        value={formData.yearlyOriginalPrice}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "yearlyOriginalPrice",
+                            e.target.value.replace("$", "")
+                          )
+                        }
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Original price (optional)"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Features (one per line)
+                    Features (one per line){" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <textarea
-                    defaultValue={selectedPlan?.features.join("\n")}
+                    value={formData.features}
+                    onChange={(e) =>
+                      handleInputChange("features", e.target.value)
+                    }
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                     placeholder="Enter features, one per line"
+                    required
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Total Subscribers
-                  </label>
-                  <input
-                    type="number"
-                    defaultValue={selectedPlan?.totalSubscribers}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter number of subscribers"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Plan Active
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      selectedPlan && handleTogglePlan(selectedPlan.id)
-                    }
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      selectedPlan?.isActive ? "bg-blue-600" : "bg-gray-600"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                        selectedPlan?.isActive
-                          ? "translate-x-6"
-                          : "translate-x-1"
-                      }`}
-                    />
-                  </button>
                 </div>
 
                 <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
                   <button
                     type="button"
                     onClick={handleCloseModal}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    disabled={submitLoading}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                    disabled={!isFormValid() || submitLoading}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    {selectedPlan?.id === "new"
-                      ? "Create Plan"
-                      : "Save Changes"}
+                    {submitLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Please wait...
+                      </>
+                    ) : selectedPlan ? (
+                      "Save Changes"
+                    ) : (
+                      "Create Plan"
+                    )}
                   </button>
                 </div>
               </form>
