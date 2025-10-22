@@ -14,6 +14,7 @@ import {
   Moon,
   PhoneCall,
 } from "lucide-react";
+import { Toaster } from "react-hot-toast";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -41,7 +42,7 @@ const navItems = [
     icon: DollarSign,
   },
   {
-    href: "/team",
+    href: "/dashboard/team",
     label: "Team & roles",
     icon: UserCircle,
   },
@@ -104,6 +105,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex-1 flex flex-col">{children}</div>
           </div>
         </div>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: "#363636",
+              color: "#fff",
+            },
+            success: {
+              duration: 3000,
+              iconTheme: {
+                primary: "#10B981",
+                secondary: "#fff",
+              },
+            },
+            error: {
+              duration: 4000,
+              iconTheme: {
+                primary: "#EF4444",
+                secondary: "#fff",
+              },
+            },
+          }}
+        />
       </body>
     </html>
   );

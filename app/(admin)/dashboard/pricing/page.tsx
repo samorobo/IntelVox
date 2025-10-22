@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import DashboardHeader from "@/components/DashboardHeader";
-import { Check, Plus, X, CheckCircle, XCircle, Info } from "lucide-react";
+import { Check, Plus, X, Loader2 } from "lucide-react";
 import axiosClient from "@/lib/axiosClient";
+import toast from "react-hot-toast";
 
 interface Plan {
-  _id?: string;
+  id: string;
   name: string;
   description: string;
   isActive: boolean;
@@ -22,25 +23,16 @@ interface Plan {
   };
   features: string[];
   totalSubscribers: number;
-}
-
-interface Notification {
-  id: string;
-  message: string;
-  type: "success" | "error" | "info";
-  timestamp: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function SubscriptionPlansPage() {
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
-    "monthly"
-  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -51,36 +43,9 @@ export default function SubscriptionPlansPage() {
     features: "",
   });
 
-  // Fetch plans from backend
   useEffect(() => {
     fetchPlans();
   }, []);
-
-  const addNotification = (
-    message: string,
-    type: "success" | "error" | "info"
-  ) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    const newNotification: Notification = {
-      id,
-      message,
-      type,
-      timestamp: Date.now(),
-    };
-
-    setNotifications((prev) => [newNotification, ...prev]);
-
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-      removeNotification(id);
-    }, 5000);
-  };
-
-  const removeNotification = (id: string) => {
-    setNotifications((prev) =>
-      prev.filter((notification) => notification.id !== id)
-    );
-  };
 
   const fetchPlans = async () => {
     setLoading(true);
@@ -88,11 +53,8 @@ export default function SubscriptionPlansPage() {
       const response = await axiosClient.get("/plans");
       setPlans(response.data);
     } catch (err: any) {
-      addNotification(
-        err.response?.data?.error || "Failed to fetch plans",
-        "error"
-      );
       console.error("Error fetching plans:", err);
+      toast.error(err.response?.data?.error || "Failed to fetch plans");
     } finally {
       setLoading(false);
     }
@@ -102,17 +64,15 @@ export default function SubscriptionPlansPage() {
     if (price.toLowerCase() === "free" || price === "0") {
       return "Free";
     }
-    // Add dollar sign if it's a number (with optional decimal)
     if (/^\d+(\.\d{1,2})?$/.test(price)) {
       return `$${price}`;
     }
-    // If it already has a dollar sign or other format, return as is
     return price;
   };
 
   const handleTogglePlan = async (planId: string) => {
     try {
-      const plan = plans.find((p) => p._id === planId);
+      const plan = plans.find((p) => p.id === planId);
       if (!plan) return;
 
       const updatedPlan = { ...plan, isActive: !plan.isActive };
@@ -122,22 +82,18 @@ export default function SubscriptionPlansPage() {
 
       setPlans((prevPlans) =>
         prevPlans.map((plan) =>
-          plan._id === planId ? { ...plan, isActive: !plan.isActive } : plan
+          plan.id === planId ? { ...plan, isActive: !plan.isActive } : plan
         )
       );
 
-      addNotification(
+      toast.success(
         `"${plan.name}" plan ${
           updatedPlan.isActive ? "enabled" : "disabled"
-        } successfully`,
-        "success"
+        } successfully`
       );
     } catch (err: any) {
-      addNotification(
-        err.response?.data?.error || "Failed to update plan status",
-        "error"
-      );
       console.error("Error updating plan:", err);
+      toast.error(err.response?.data?.error || "Failed to update plan status");
     }
   };
 
@@ -227,30 +183,19 @@ export default function SubscriptionPlansPage() {
         totalSubscribers: 0,
       };
 
-      if (selectedPlan?._id) {
-        // Update existing plan
-        await axiosClient.patch(`/plans/${selectedPlan._id}`, planData);
-        addNotification(
-          `"${planData.name}" plan updated successfully`,
-          "success"
-        );
+      if (selectedPlan?.id) {
+        await axiosClient.patch(`/plans/${selectedPlan.id}`, planData);
+        toast.success(`"${planData.name}" plan updated successfully`);
       } else {
-        // Create new plan
         await axiosClient.post("/plans", planData);
-        addNotification(
-          `"${planData.name}" plan created successfully`,
-          "success"
-        );
+        toast.success(`"${planData.name}" plan created successfully`);
       }
 
       await fetchPlans();
       handleCloseModal();
     } catch (err: any) {
-      addNotification(
-        err.response?.data?.error || "Failed to save plan",
-        "error"
-      );
       console.error("Error saving plan:", err);
+      toast.error(err.response?.data?.error || "Failed to save plan");
     } finally {
       setSubmitLoading(false);
     }
@@ -262,8 +207,9 @@ export default function SubscriptionPlansPage() {
         <DashboardHeader title="Subscription management" />
         <div className="p-8">
           <div className="flex items-center justify-center h-64">
-            <div className="text-gray-500 dark:text-gray-400">
-              Loading plans...
+            <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Loading plans...</span>
             </div>
           </div>
         </div>
@@ -274,39 +220,6 @@ export default function SubscriptionPlansPage() {
   return (
     <>
       <DashboardHeader title="Subscription management" />
-
-      {/* Notification Container */}
-      <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-        {notifications.map((notification) => (
-          <div
-            key={notification.id}
-            className={`flex items-start gap-3 p-4 rounded-lg shadow-lg border backdrop-blur-sm transform transition-all duration-300 animate-in slide-in-from-right-full ${
-              notification.type === "success"
-                ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300"
-                : notification.type === "error"
-                ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300"
-                : "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300"
-            }`}
-          >
-            <div className="flex-shrink-0 mt-0.5">
-              {notification.type === "success" && (
-                <CheckCircle className="w-5 h-5" />
-              )}
-              {notification.type === "error" && <XCircle className="w-5 h-5" />}
-              {notification.type === "info" && <Info className="w-5 h-5" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{notification.message}</p>
-            </div>
-            <button
-              onClick={() => removeNotification(notification.id)}
-              className="flex-shrink-0 p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
-      </div>
 
       <div className="p-8">
         <div className="flex items-center justify-between mb-8">
@@ -330,7 +243,7 @@ export default function SubscriptionPlansPage() {
         <div className="grid grid-cols-3 gap-6">
           {plans.map((plan) => (
             <div
-              key={plan._id}
+              key={plan.id}
               className="bg-gray-800 dark:bg-gray-900 rounded-lg border border-gray-700 dark:border-gray-800 overflow-hidden hover:border-gray-600 transition-colors flex flex-col"
             >
               <div className="p-6 border-b border-gray-700 dark:border-gray-800">
@@ -343,7 +256,7 @@ export default function SubscriptionPlansPage() {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <button
-                      onClick={() => handleTogglePlan(plan._id!)}
+                      onClick={() => handleTogglePlan(plan.id)}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                         plan.isActive ? "bg-blue-600" : "bg-gray-600"
                       }`}
@@ -415,7 +328,6 @@ export default function SubscriptionPlansPage() {
                 ))}
               </div>
 
-              {/* Always at the bottom */}
               <div className="px-6 py-4 bg-gray-700/50 border-t border-gray-700 dark:border-gray-800 mt-auto">
                 <p className="text-xs text-gray-400">
                   Total subscribed tenants:{" "}
@@ -598,7 +510,7 @@ export default function SubscriptionPlansPage() {
                   >
                     {submitLoading ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                         Please wait...
                       </>
                     ) : selectedPlan ? (

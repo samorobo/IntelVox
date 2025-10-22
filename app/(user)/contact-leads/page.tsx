@@ -220,7 +220,7 @@ export default function ContactLeadsPage() {
                       <td className="py-4 px-6">
                         <button
                           onClick={() => handleDelete(lead._id)}
-                          className="inline-flex items-center justify-center p-2 text-red-600 border border-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           title="Delete lead"
                         >
                           <Trash2 className="w-4 h-4" />
