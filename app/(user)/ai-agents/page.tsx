@@ -3,7 +3,17 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import DashboardHeader from "@/components/DashboardHeader";
-import { Search, Download, Plus, X, Loader2, Edit, Trash2 } from "lucide-react";
+import {
+  Search,
+  Download,
+  Plus,
+  X,
+  Loader2,
+  Edit,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import toast from "react-hot-toast";
 
 interface AIAgent {
@@ -15,21 +25,42 @@ interface AIAgent {
   createdOn: string;
   status: "active" | "inactive" | "suspended";
   type: string;
+  llmModel: string;
+  voice: string;
+  knowledgeBase: string;
 }
 
 interface FormData {
   name: string;
   persona: string;
   type: string;
+  llmModel: string;
+  voice: string;
+  knowledgeBase: string;
 }
 
 interface FormErrors {
   name?: string;
   persona?: string;
   type?: string;
+  llmModel?: string;
+  voice?: string;
+  knowledgeBase?: string;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+// Available options for LLM models and voices
+const LLM_MODELS = [
+  "gpt-4",
+  "gpt-4-turbo",
+  "gpt-3.5-turbo",
+  "claude-3-opus",
+  "claude-3-sonnet",
+  "claude-3-haiku",
+];
+
+const VOICE_OPTIONS = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
 
 export default function AIAgentPage() {
   const [agents, setAgents] = useState<AIAgent[]>([]);
@@ -41,10 +72,14 @@ export default function AIAgentPage() {
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
+  const [formStep, setFormStep] = useState<"basic" | "knowledge">("basic");
   const [formData, setFormData] = useState<FormData>({
     name: "",
     persona: "",
     type: "inbound",
+    llmModel: "",
+    voice: "",
+    knowledgeBase: "",
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -116,17 +151,24 @@ export default function AIAgentPage() {
 
   const handleOpenModal = (agent: AIAgent | null = null) => {
     setEditingAgent(agent);
+    setFormStep("basic");
     if (agent) {
       setFormData({
         name: agent.name,
         persona: agent.persona,
         type: agent.type,
+        llmModel: agent.llmModel,
+        voice: agent.voice,
+        knowledgeBase: agent.knowledgeBase,
       });
     } else {
       setFormData({
         name: "",
         persona: "",
         type: "inbound",
+        llmModel: "",
+        voice: "",
+        knowledgeBase: "",
       });
     }
     setFormErrors({});
@@ -137,25 +179,56 @@ export default function AIAgentPage() {
     if (!submitting) {
       setIsModalOpen(false);
       setEditingAgent(null);
-      setFormData({ name: "", persona: "", type: "inbound" });
+      setFormStep("basic");
+      setFormData({
+        name: "",
+        persona: "",
+        type: "inbound",
+        llmModel: "",
+        voice: "",
+        knowledgeBase: "",
+      });
       setFormErrors({});
     }
   };
 
-  const validateForm = (): boolean => {
+  const validateBasicStep = (): boolean => {
     const errors: FormErrors = {};
 
     if (!formData.name.trim()) errors.name = "Agent name is required";
     if (!formData.persona.trim())
       errors.persona = "Persona description is required";
     if (!formData.type) errors.type = "Agent type is required";
+    if (!formData.llmModel) errors.llmModel = "LLM Model is required";
+    if (!formData.voice) errors.voice = "Voice is required";
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
+  const validateKnowledgeStep = (): boolean => {
+    const errors: FormErrors = {};
+
+    if (!formData.knowledgeBase.trim()) {
+      errors.knowledgeBase = "Knowledge base is required";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleNextStep = () => {
+    if (validateBasicStep()) {
+      setFormStep("knowledge");
+    }
+  };
+
+  const handlePrevStep = () => {
+    setFormStep("basic");
+  };
+
   const handleSubmit = async () => {
-    if (!validateForm()) return;
+    if (!validateKnowledgeStep()) return;
 
     try {
       setSubmitting(true);
@@ -176,7 +249,7 @@ export default function AIAgentPage() {
           ...formData,
           conversations: 0,
           retention: 0,
-          tenantId: "cmh1u92c80002txnoc32xlu3h",
+          tenantId: "cmhqjnjb50004vkiolo5br0qd",
         };
 
         const response = await axios.post(`${API_BASE_URL}agent`, agentData);
@@ -227,6 +300,168 @@ export default function AIAgentPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const renderFormStep = () => {
+    if (formStep === "basic") {
+      return (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Agent Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => handleInputChange("name", e.target.value)}
+              disabled={submitting}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                formErrors.name
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
+              placeholder="Enter agent name"
+            />
+            {formErrors.name && (
+              <p className="mt-1 text-sm text-red-500">{formErrors.name}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Persona Description <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={formData.persona}
+              onChange={(e) => handleInputChange("persona", e.target.value)}
+              disabled={submitting}
+              rows={3}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${
+                formErrors.persona
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
+              placeholder="Describe the agent's personality and behavior..."
+            />
+            {formErrors.persona && (
+              <p className="mt-1 text-sm text-red-500">{formErrors.persona}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Agent Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.type}
+              onChange={(e) => handleInputChange("type", e.target.value)}
+              disabled={submitting}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                formErrors.type
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
+            >
+              <option value="inbound">Inbound Agent</option>
+              <option value="outbound">Outbound Agent</option>
+            </select>
+            {formErrors.type && (
+              <p className="mt-1 text-sm text-red-500">{formErrors.type}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              {formData.type === "inbound"
+                ? "Handles incoming customer queries and support requests"
+                : "Proactively reaches out to potential customers and leads"}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              LLM Model <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.llmModel}
+              onChange={(e) => handleInputChange("llmModel", e.target.value)}
+              disabled={submitting}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                formErrors.llmModel
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
+            >
+              <option value="">Select LLM Model</option>
+              {LLM_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+            {formErrors.llmModel && (
+              <p className="mt-1 text-sm text-red-500">{formErrors.llmModel}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Voice <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.voice}
+              onChange={(e) => handleInputChange("voice", e.target.value)}
+              disabled={submitting}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                formErrors.voice
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
+            >
+              <option value="">Select Voice</option>
+              {VOICE_OPTIONS.map((voice) => (
+                <option key={voice} value={voice}>
+                  {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                </option>
+              ))}
+            </select>
+            {formErrors.voice && (
+              <p className="mt-1 text-sm text-red-500">{formErrors.voice}</p>
+            )}
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Knowledge Base <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={formData.knowledgeBase}
+              onChange={(e) =>
+                handleInputChange("knowledgeBase", e.target.value)
+              }
+              disabled={submitting}
+              rows={8}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${
+                formErrors.knowledgeBase
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
+              placeholder="Enter the agent's knowledge base, training data, or specific instructions..."
+            />
+            {formErrors.knowledgeBase && (
+              <p className="mt-1 text-sm text-red-500">
+                {formErrors.knowledgeBase}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              Provide detailed information, FAQs, or specific instructions that
+              the agent should know.
+            </p>
+          </div>
+        </div>
+      );
+    }
   };
 
   return (
@@ -330,6 +565,12 @@ export default function AIAgentPage() {
                       Type
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                      LLM Model
+                    </th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Voice
+                    </th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Conversations
                     </th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -367,6 +608,12 @@ export default function AIAgentPage() {
                           {agent.type.charAt(0).toUpperCase() +
                             agent.type.slice(1)}
                         </span>
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
+                        {agent.llmModel}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 capitalize">
+                        {agent.voice}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
                         {agent.conversations.toLocaleString()}
@@ -445,13 +692,19 @@ export default function AIAgentPage() {
 
           <div className="flex min-h-full items-center justify-center p-4">
             <div
-              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md animate-fadeIn"
+              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl animate-fadeIn"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {editingAgent ? "Edit AI Agent" : "Create New Bot"}
-                </h3>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {editingAgent ? "Edit AI Agent" : "Create New Bot"}
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Step {formStep === "basic" ? "1" : "2"} of 2 -{" "}
+                    {formStep === "basic" ? "Basic Details" : "Knowledge Base"}
+                  </p>
+                </div>
                 <button
                   onClick={handleCloseModal}
                   disabled={submitting}
@@ -461,109 +714,59 @@ export default function AIAgentPage() {
                 </button>
               </div>
 
-              <div className="px-6 py-4 space-y-4">
+              <div className="px-6 py-4">{renderFormStep()}</div>
+
+              <div className="flex justify-between items-center mt-6 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Agent Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange("name", e.target.value)}
-                    disabled={submitting}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      formErrors.name
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-300 dark:border-gray-600"
-                    }`}
-                    placeholder="Enter agent name"
-                  />
-                  {formErrors.name && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {formErrors.name}
-                    </p>
+                  {formStep === "knowledge" && (
+                    <button
+                      onClick={handlePrevStep}
+                      disabled={submitting}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Back
+                    </button>
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Persona Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={formData.persona}
-                    onChange={(e) =>
-                      handleInputChange("persona", e.target.value)
-                    }
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleCloseModal}
                     disabled={submitting}
-                    rows={3}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${
-                      formErrors.persona
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-300 dark:border-gray-600"
-                    }`}
-                    placeholder="Describe the agent's personality and behavior..."
-                  />
-                  {formErrors.persona && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {formErrors.persona}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Agent Type <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) => handleInputChange("type", e.target.value)}
-                    disabled={submitting}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      formErrors.type
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-300 dark:border-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="inbound">Inbound Agent</option>
-                    <option value="outbound">Outbound Agent</option>
-                  </select>
-                  {formErrors.type && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {formErrors.type}
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-gray-500">
-                    {formData.type === "inbound"
-                      ? "Handles incoming customer queries and support requests"
-                      : "Proactively reaches out to potential customers and leads"}
-                  </p>
-                </div>
-              </div>
+                    Cancel
+                  </button>
 
-              <div className="flex justify-end gap-3 mt-6 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={handleCloseModal}
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Please wait...
-                    </>
-                  ) : editingAgent ? (
-                    "Save Changes"
+                  {formStep === "basic" ? (
+                    <button
+                      onClick={handleNextStep}
+                      disabled={submitting}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   ) : (
-                    "Create Agent"
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Please wait...
+                        </>
+                      ) : editingAgent ? (
+                        "Save Changes"
+                      ) : (
+                        "Create Agent"
+                      )}
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             </div>
           </div>

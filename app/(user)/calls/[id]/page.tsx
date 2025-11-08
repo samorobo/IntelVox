@@ -377,22 +377,6 @@ export default function CallDetailPage() {
                         </div>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center gap-4">
-                        <div className="flex-shrink-0 w-10 h-10 bg-violet-100 dark:bg-violet-900/30 rounded-lg flex items-center justify-center">
-                          <Building className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                            Tenant name
-                          </div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.tenant}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
