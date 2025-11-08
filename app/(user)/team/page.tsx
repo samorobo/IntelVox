@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import axios from "axios";
 import DashboardHeader from "@/components/DashboardHeader";
 import { Search, Download, Plus, X, Loader2, Edit, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -26,49 +27,7 @@ interface FormErrors {
   role?: string;
 }
 
-// Mock data for demonstration
-const mockTeamMembers: TeamMember[] = [
-  {
-    id: "1",
-    name: "John Smith",
-    email: "john.smith@company.com",
-    role: "agent_manager",
-    addedOn: "2024-01-15",
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "Sarah Johnson",
-    email: "sarah.j@company.com",
-    role: "lead_manager",
-    addedOn: "2024-01-10",
-    status: "active",
-  },
-  {
-    id: "3",
-    name: "Mike Chen",
-    email: "mike.chen@company.com",
-    role: "agent_manager",
-    addedOn: "2024-01-20",
-    status: "inactive",
-  },
-  {
-    id: "4",
-    name: "Emily Davis",
-    email: "emily.davis@company.com",
-    role: "lead_manager",
-    addedOn: "2024-01-18",
-    status: "active",
-  },
-  {
-    id: "5",
-    name: "Alex Rodriguez",
-    email: "alex.r@company.com",
-    role: "agent_manager",
-    addedOn: "2024-01-12",
-    status: "active",
-  },
-];
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function TeamManagementPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -86,25 +45,30 @@ export default function TeamManagementPage() {
   const [submitting, setSubmitting] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
-  // Load mock data
+  const tenantId = "cmh1u92c80002txnoc32xlu3h";
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setTeamMembers(mockTeamMembers);
-      setFilteredMembers(mockTeamMembers);
-      setLoading(false);
+    const loadTeamMembers = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(
+          `${API_BASE_URL}tenant/${tenantId}/members`
+        );
+        setTeamMembers(response.data);
+        setFilteredMembers(response.data);
+      } catch (error) {
+        console.error("Error loading team members:", error);
+        toast.error("Failed to load team members");
+      } finally {
+        setLoading(false);
+      }
     };
 
-    loadData();
-  }, []);
+    loadTeamMembers();
+  }, [tenantId]);
 
-  // Filter members based on search
   useEffect(() => {
     let filtered = teamMembers;
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(
         (member) =>
@@ -120,18 +84,13 @@ export default function TeamManagementPage() {
   const toggleStatus = async (id: string) => {
     try {
       setStatusUpdating(id);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const response = await axios.patch(
+        `${API_BASE_URL}tenant/${tenantId}/member/${id}/toggle-status`
+      );
 
       setTeamMembers((prev) =>
-        prev.map((member) =>
-          member.id === id
-            ? {
-                ...member,
-                status: member.status === "active" ? "inactive" : "active",
-              }
-            : member
-        )
+        prev.map((member) => (member.id === id ? response.data : member))
       );
 
       const member = teamMembers.find((m) => m.id === id);
@@ -141,6 +100,7 @@ export default function TeamManagementPage() {
         } successfully`
       );
     } catch (err) {
+      console.error("Error updating team member status:", err);
       toast.error("Failed to update team member status");
     } finally {
       setStatusUpdating(null);
@@ -195,41 +155,39 @@ export default function TeamManagementPage() {
 
     try {
       setSubmitting(true);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       if (editingMember) {
         // Update existing member
+        const response = await axios.put(
+          `${API_BASE_URL}tenant/${tenantId}/member/${editingMember.id}`,
+          formData
+        );
         setTeamMembers((prev) =>
           prev.map((member) =>
-            member.id === editingMember.id
-              ? {
-                  ...member,
-                  name: formData.name,
-                  email: formData.email,
-                  role: formData.role,
-                }
-              : member
+            member.id === editingMember.id ? response.data : member
           )
         );
         toast.success("Team member updated successfully!");
       } else {
         // Create new member
-        const newMember: TeamMember = {
-          id: Math.random().toString(36).substr(2, 9),
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          addedOn: new Date().toISOString().split("T")[0],
-          status: "active",
-        };
-        setTeamMembers((prev) => [newMember, ...prev]);
+        const response = await axios.post(
+          `${API_BASE_URL}tenant/${tenantId}/member`,
+          formData
+        );
+        setTeamMembers((prev) => [response.data, ...prev]);
         toast.success("Team member added successfully!");
       }
 
       handleCloseModal();
-    } catch (err) {
-      toast.error("Failed to save team member");
+    } catch (err: any) {
+      console.error("Error saving team member:", err);
+      if (
+        err.response?.data?.error === "Email already exists for this tenant"
+      ) {
+        toast.error("Email already exists in your team");
+      } else {
+        toast.error("Failed to save team member");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -239,11 +197,11 @@ export default function TeamManagementPage() {
     if (!confirm("Are you sure you want to delete this team member?")) return;
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await axios.delete(`${API_BASE_URL}tenant/${tenantId}/member/${id}`);
       setTeamMembers((prev) => prev.filter((member) => member.id !== id));
       toast.success("Team member deleted successfully");
     } catch (err) {
+      console.error("Error deleting team member:", err);
       toast.error("Failed to delete team member");
     }
   };
@@ -263,6 +221,10 @@ export default function TeamManagementPage() {
 
   const getRoleDisplayName = (role: "agent_manager" | "lead_manager") => {
     return role === "agent_manager" ? "Agent Manager" : "Lead Manager";
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
   };
 
   return (
@@ -357,7 +319,7 @@ export default function TeamManagementPage() {
                         </span>
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(member.addedOn).toLocaleDateString()}
+                        {formatDate(member.addedOn)}
                       </td>
                       <td className="py-4 px-6">
                         <button

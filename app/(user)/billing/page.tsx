@@ -189,7 +189,6 @@ export default function SubscriptionManagementPage() {
       );
       setShowPlanModal(false);
 
-      // Refresh subscription data
       fetchSubscriptions();
     } catch (err: any) {
       addNotification(
@@ -202,8 +201,6 @@ export default function SubscriptionManagementPage() {
 
   const handleExport = async () => {
     try {
-      // This would be the actual endpoint for exporting subscription data
-      // await axiosClient.get("/users/subscriptions/export");
       addNotification("Subscription data exported successfully", "success");
     } catch (err: any) {
       addNotification(
@@ -263,7 +260,6 @@ export default function SubscriptionManagementPage() {
         </h1>
       </div>
 
-      {/* Notification Container */}
       <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
         {notifications.map((notification) => (
           <div
@@ -289,7 +285,6 @@ export default function SubscriptionManagementPage() {
         ))}
       </div>
 
-      {/* Plan Change Modal */}
       {showPlanModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Glossy Background */}
@@ -299,7 +294,6 @@ export default function SubscriptionManagementPage() {
             <div className="absolute top-1/3 right-1/3 w-20 h-20 bg-indigo-200/25 rounded-full blur-lg animate-pulse delay-500"></div>
           </div>
 
-          {/* Modal Content */}
           <div className="relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border border-white/20 dark:border-gray-600/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b border-gray-200/50 dark:border-gray-700/50">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -323,7 +317,6 @@ export default function SubscriptionManagementPage() {
                 </p>
               </div>
 
-              {/* Billing Toggle */}
               <div className="flex justify-center mb-8">
                 <div className="bg-gray-100/80 dark:bg-gray-700/80 backdrop-blur-sm rounded-lg p-1 border border-gray-200/50 dark:border-gray-600/50">
                   <button
@@ -349,7 +342,6 @@ export default function SubscriptionManagementPage() {
                 </div>
               </div>
 
-              {/* Plans from Database */}
               {plansLoading ? (
                 <div className="text-center py-8">
                   <div className="text-gray-500 dark:text-gray-400">

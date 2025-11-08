@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import axios from "axios";
 import DashboardHeader from "@/components/DashboardHeader";
 import { Search, Download, Plus, X, Loader2, Edit, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -9,17 +10,17 @@ interface AIAgent {
   id: string;
   name: string;
   persona: string;
-  convos: number;
-  retention: string;
+  conversations: number;
+  retention: number;
   createdOn: string;
-  status: "active" | "inactive";
-  type: "inbound" | "outbound";
+  status: "active" | "inactive" | "suspended";
+  type: string;
 }
 
 interface FormData {
   name: string;
   persona: string;
-  type: "inbound" | "outbound";
+  type: string;
 }
 
 interface FormErrors {
@@ -28,59 +29,7 @@ interface FormErrors {
   type?: string;
 }
 
-// Mock data for demonstration
-const mockAgents: AIAgent[] = [
-  {
-    id: "1",
-    name: "Sales Assistant",
-    persona: "Friendly sales representative",
-    convos: 1247,
-    retention: "87%",
-    createdOn: "2024-01-15",
-    status: "active",
-    type: "inbound",
-  },
-  {
-    id: "2",
-    name: "Support Bot",
-    persona: "Helpful customer support agent",
-    convos: 2893,
-    retention: "92%",
-    createdOn: "2024-01-10",
-    status: "active",
-    type: "inbound",
-  },
-  {
-    id: "3",
-    name: "Lead Generator",
-    persona: "Proactive outreach specialist",
-    convos: 856,
-    retention: "78%",
-    createdOn: "2024-01-20",
-    status: "inactive",
-    type: "outbound",
-  },
-  {
-    id: "4",
-    name: "Feedback Collector",
-    persona: "Professional feedback analyst",
-    convos: 542,
-    retention: "85%",
-    createdOn: "2024-01-18",
-    status: "active",
-    type: "outbound",
-  },
-  {
-    id: "5",
-    name: "Appointment Setter",
-    persona: "Efficient scheduling assistant",
-    convos: 967,
-    retention: "91%",
-    createdOn: "2024-01-12",
-    status: "active",
-    type: "outbound",
-  },
-];
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function AIAgentPage() {
   const [agents, setAgents] = useState<AIAgent[]>([]);
@@ -101,30 +50,31 @@ export default function AIAgentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
-  // Load mock data
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setAgents(mockAgents);
-      setFilteredAgents(mockAgents);
-      setLoading(false);
+    const loadAgents = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}agents`);
+        setAgents(response.data);
+        setFilteredAgents(response.data);
+      } catch (error) {
+        console.error("Error loading agents:", error);
+        toast.error("Failed to load agents");
+      } finally {
+        setLoading(false);
+      }
     };
 
-    loadData();
+    loadAgents();
   }, []);
 
-  // Filter agents based on search and tab
   useEffect(() => {
     let filtered = agents;
 
-    // Filter by tab
     if (activeTab !== "all") {
       filtered = filtered.filter((agent) => agent.type === activeTab);
     }
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(
         (agent) =>
@@ -139,27 +89,25 @@ export default function AIAgentPage() {
   const toggleStatus = async (id: string) => {
     try {
       setStatusUpdating(id);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const agent = agents.find((a) => a.id === id);
+      const newStatus = agent?.status === "active" ? "inactive" : "active";
+
+      await axios.put(`${API_BASE_URL}agent/${id}`, { status: newStatus });
 
       setAgents((prev) =>
         prev.map((agent) =>
-          agent.id === id
-            ? {
-                ...agent,
-                status: agent.status === "active" ? "inactive" : "active",
-              }
-            : agent
+          agent.id === id ? { ...agent, status: newStatus } : agent
         )
       );
 
-      const agent = agents.find((a) => a.id === id);
       toast.success(
         `Agent ${
-          agent?.status === "active" ? "deactivated" : "activated"
+          newStatus === "active" ? "activated" : "deactivated"
         } successfully`
       );
     } catch (err) {
+      console.error("Error updating agent status:", err);
       toast.error("Failed to update agent status");
     } finally {
       setStatusUpdating(null);
@@ -211,42 +159,34 @@ export default function AIAgentPage() {
 
     try {
       setSubmitting(true);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       if (editingAgent) {
-        // Update existing agent
+        const response = await axios.put(
+          `${API_BASE_URL}agent/${editingAgent.id}`,
+          formData
+        );
         setAgents((prev) =>
           prev.map((agent) =>
-            agent.id === editingAgent.id
-              ? {
-                  ...agent,
-                  name: formData.name,
-                  persona: formData.persona,
-                  type: formData.type,
-                }
-              : agent
+            agent.id === editingAgent.id ? response.data : agent
           )
         );
         toast.success("Agent updated successfully!");
       } else {
-        // Create new agent
-        const newAgent: AIAgent = {
-          id: Math.random().toString(36).substr(2, 9),
-          name: formData.name,
-          persona: formData.persona,
-          convos: 0,
-          retention: "0%",
-          createdOn: new Date().toISOString().split("T")[0],
-          status: "active",
-          type: formData.type,
+        const agentData = {
+          ...formData,
+          conversations: 0,
+          retention: 0,
+          tenantId: "cmh1u92c80002txnoc32xlu3h",
         };
-        setAgents((prev) => [newAgent, ...prev]);
+
+        const response = await axios.post(`${API_BASE_URL}agent`, agentData);
+        setAgents((prev) => [response.data, ...prev]);
         toast.success("Agent created successfully!");
       }
 
       handleCloseModal();
     } catch (err) {
+      console.error("Error saving agent:", err);
       toast.error("Failed to save agent");
     } finally {
       setSubmitting(false);
@@ -257,11 +197,11 @@ export default function AIAgentPage() {
     if (!confirm("Are you sure you want to delete this agent?")) return;
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await axios.delete(`${API_BASE_URL}agent/${id}`);
       setAgents((prev) => prev.filter((agent) => agent.id !== id));
       toast.success("Agent deleted successfully");
     } catch (err) {
+      console.error("Error deleting agent:", err);
       toast.error("Failed to delete agent");
     }
   };
@@ -273,17 +213,20 @@ export default function AIAgentPage() {
     }
   };
 
-  const getTypeBadgeColor = (type: "inbound" | "outbound") => {
+  const getTypeBadgeColor = (type: string) => {
     return type === "inbound"
       ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
       : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300";
   };
 
-  const getRetentionColor = (retention: string) => {
-    const percentage = parseInt(retention);
-    if (percentage >= 90) return "text-green-600 dark:text-green-400";
-    if (percentage >= 80) return "text-yellow-600 dark:text-yellow-400";
+  const getRetentionColor = (retention: number) => {
+    if (retention >= 90) return "text-green-600 dark:text-green-400";
+    if (retention >= 80) return "text-yellow-600 dark:text-yellow-400";
     return "text-red-600 dark:text-red-400";
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
   };
 
   return (
@@ -329,7 +272,6 @@ export default function AIAgentPage() {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -427,15 +369,15 @@ export default function AIAgentPage() {
                         </span>
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {agent.convos.toLocaleString()}
+                        {agent.conversations.toLocaleString()}
                       </td>
                       <td className="py-4 px-6 text-sm font-medium">
                         <span className={getRetentionColor(agent.retention)}>
-                          {agent.retention}
+                          {agent.retention}%
                         </span>
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(agent.createdOn).toLocaleDateString()}
+                        {formatDate(agent.createdOn)}
                       </td>
                       <td className="py-4 px-6">
                         <button
@@ -494,7 +436,6 @@ export default function AIAgentPage() {
         </div>
       </div>
 
-      {/* Create/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div
@@ -575,12 +516,7 @@ export default function AIAgentPage() {
                   </label>
                   <select
                     value={formData.type}
-                    onChange={(e) =>
-                      handleInputChange(
-                        "type",
-                        e.target.value as "inbound" | "outbound"
-                      )
-                    }
+                    onChange={(e) => handleInputChange("type", e.target.value)}
                     disabled={submitting}
                     className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
                       formErrors.type
