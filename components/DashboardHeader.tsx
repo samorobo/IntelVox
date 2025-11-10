@@ -1,6 +1,7 @@
 "use client";
 
 import { UserCircle, Sun, Moon } from "lucide-react";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 
 interface DashboardHeaderProps {
@@ -47,9 +48,11 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
               <Moon className="w-5 h-5" />
             )}
           </button>
-          <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">
-            <UserCircle className="w-6 h-6" />
-          </button>
+          <Link href="/settings">
+            <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">
+              <UserCircle className="w-6 h-6" />
+            </button>
+          </Link>
         </div>
       </div>
     </header>
