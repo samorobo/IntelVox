@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { Camera, Edit, Trash2, Plus, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Camera, Edit, Trash2, Plus, X, Eye, EyeOff } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
+import axios from "axios";
 
 interface LLMConfig {
   id: string;
   provider: string;
   apiKey: string;
-  modelName: string;
+  modelname: string;
   maxTokens: number | null;
   temperature: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface TwilioConfig {
@@ -18,6 +22,9 @@ interface TwilioConfig {
   accountSid: string;
   authToken: string;
   phoneNumber: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Notification {
@@ -26,6 +33,10 @@ interface Notification {
   type: "success" | "error" | "info";
   timestamp: number;
 }
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/";
+const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
 
 export default function UserSettingsPage() {
   const [user, setUser] = useState({
@@ -50,25 +61,11 @@ export default function UserSettingsPage() {
     greeting: "Hello! How can I help you today?",
   });
 
-  const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([
-    {
-      id: "1",
-      provider: "openai",
-      apiKey: "sk-proj-***************",
-      modelName: "gpt-4",
-      maxTokens: 2000,
-      temperature: 0.7,
-    },
-  ]);
-
-  const [twilioConfigs, setTwilioConfigs] = useState<TwilioConfig[]>([
-    {
-      id: "1",
-      accountSid: "AC***************",
-      authToken: "***************",
-      phoneNumber: "+1234567890",
-    },
-  ]);
+  const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([]);
+  const [twilioConfigs, setTwilioConfigs] = useState<TwilioConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [twilioLoading, setTwilioLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"llm" | "twilio">("llm");
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -76,20 +73,67 @@ export default function UserSettingsPage() {
   const [showTwilioModal, setShowTwilioModal] = useState(false);
   const [editingLLM, setEditingLLM] = useState<LLMConfig | null>(null);
   const [editingTwilio, setEditingTwilio] = useState<TwilioConfig | null>(null);
+  const [savingLLM, setSavingLLM] = useState(false);
+  const [savingTwilio, setSavingTwilio] = useState(false);
 
-  const [llmForm, setLlmForm] = useState<Omit<LLMConfig, "id">>({
+  const [visibleApiKeys, setVisibleApiKeys] = useState<Set<string>>(new Set());
+  const [visibleAuthTokens, setVisibleAuthTokens] = useState<Set<string>>(
+    new Set()
+  );
+  const [visibleAccountSids, setVisibleAccountSids] = useState<Set<string>>(
+    new Set()
+  );
+
+  const [llmForm, setLlmForm] = useState<
+    Omit<LLMConfig, "id" | "isActive" | "createdAt" | "updatedAt">
+  >({
     provider: "openai",
     apiKey: "",
-    modelName: "",
+    modelname: "",
     maxTokens: null,
     temperature: null,
   });
 
-  const [twilioForm, setTwilioForm] = useState<Omit<TwilioConfig, "id">>({
+  const [twilioForm, setTwilioForm] = useState<
+    Omit<TwilioConfig, "id" | "isActive" | "createdAt" | "updatedAt">
+  >({
     accountSid: "",
     authToken: "",
     phoneNumber: "",
   });
+
+  useEffect(() => {
+    fetchLLMConfigs();
+    fetchTwilioConfigs();
+  }, []);
+
+  const fetchLLMConfigs = async () => {
+    try {
+      setLlmLoading(true);
+      const response = await axios.get(`${API_BASE_URL}llm/${TENANT_ID}`);
+      setLlmConfigs(response.data);
+    } catch (error) {
+      console.error("Error fetching LLM configs:", error);
+      addNotification("Failed to fetch LLM configurations", "error");
+    } finally {
+      setLlmLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const fetchTwilioConfigs = async () => {
+    try {
+      setTwilioLoading(true);
+      const response = await axios.get(`${API_BASE_URL}twilio/${TENANT_ID}`);
+      setTwilioConfigs(response.data);
+    } catch (error) {
+      console.error("Error fetching Twilio configs:", error);
+      addNotification("Failed to fetch Twilio configurations", "error");
+    } finally {
+      setTwilioLoading(false);
+      setLoading(false);
+    }
+  };
 
   const addNotification = (
     message: string,
@@ -137,12 +181,48 @@ export default function UserSettingsPage() {
     addNotification("Avatar upload feature coming soon", "info");
   };
 
+  const toggleApiKeyVisibility = (id: string) => {
+    setVisibleApiKeys((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAuthTokenVisibility = (id: string) => {
+    setVisibleAuthTokens((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAccountSidVisibility = (id: string) => {
+    setVisibleAccountSids((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
   const handleAddLLM = () => {
     setEditingLLM(null);
     setLlmForm({
       provider: "openai",
       apiKey: "",
-      modelName: "",
+      modelname: "",
       maxTokens: null,
       temperature: null,
     });
@@ -154,44 +234,66 @@ export default function UserSettingsPage() {
     setLlmForm({
       provider: config.provider,
       apiKey: config.apiKey,
-      modelName: config.modelName,
+      modelname: config.modelname,
       maxTokens: config.maxTokens,
       temperature: config.temperature,
     });
     setShowLLMModal(true);
   };
 
-  const handleDeleteLLM = (id: string) => {
-    setLlmConfigs((prev) => prev.filter((config) => config.id !== id));
-    addNotification("LLM configuration deleted successfully", "success");
+  const handleDeleteLLM = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this LLM configuration?")) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_BASE_URL}llm/${TENANT_ID}/${id}`);
+      setLlmConfigs((prev) => prev.filter((config) => config.id !== id));
+      addNotification("LLM configuration deleted successfully", "success");
+    } catch (error) {
+      console.error("Error deleting LLM config:", error);
+      addNotification("Failed to delete LLM configuration", "error");
+    }
   };
 
-  const handleSaveLLM = () => {
-    if (!llmForm.provider || !llmForm.apiKey || !llmForm.modelName) {
+  const handleSaveLLM = async () => {
+    if (!llmForm.provider || !llmForm.apiKey || !llmForm.modelname) {
       addNotification("Please fill in all required fields", "error");
       return;
     }
 
-    if (editingLLM) {
-      setLlmConfigs((prev) =>
-        prev.map((config) =>
-          config.id === editingLLM.id
-            ? { ...llmForm, id: editingLLM.id }
-            : config
-        )
-      );
-      addNotification("LLM configuration updated successfully", "success");
-    } else {
-      const newConfig: LLMConfig = {
-        ...llmForm,
-        id: Math.random().toString(36).substr(2, 9),
-      };
-      setLlmConfigs((prev) => [...prev, newConfig]);
-      addNotification("LLM configuration added successfully", "success");
-    }
+    try {
+      setSavingLLM(true);
+      if (editingLLM) {
+        const response = await axios.put(
+          `${API_BASE_URL}llm/${TENANT_ID}/${editingLLM.id}`,
+          llmForm
+        );
+        setLlmConfigs((prev) =>
+          prev.map((config) =>
+            config.id === editingLLM.id ? response.data : config
+          )
+        );
+        addNotification("LLM configuration updated successfully", "success");
+      } else {
+        const response = await axios.post(
+          `${API_BASE_URL}llm/${TENANT_ID}`,
+          llmForm
+        );
+        setLlmConfigs((prev) => [...prev, response.data]);
+        addNotification("LLM configuration added successfully", "success");
+      }
 
-    setShowLLMModal(false);
-    setEditingLLM(null);
+      setShowLLMModal(false);
+      setEditingLLM(null);
+    } catch (error: any) {
+      console.error("Error saving LLM config:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to save LLM configuration";
+      addNotification(errorMessage, "error");
+    } finally {
+      setSavingLLM(false);
+    }
   };
 
   const handleAddTwilio = () => {
@@ -214,12 +316,24 @@ export default function UserSettingsPage() {
     setShowTwilioModal(true);
   };
 
-  const handleDeleteTwilio = (id: string) => {
-    setTwilioConfigs((prev) => prev.filter((config) => config.id !== id));
-    addNotification("Twilio configuration deleted successfully", "success");
+  const handleDeleteTwilio = async (id: string) => {
+    if (
+      !confirm("Are you sure you want to delete this Twilio configuration?")
+    ) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_BASE_URL}twilio/${TENANT_ID}/${id}`);
+      setTwilioConfigs((prev) => prev.filter((config) => config.id !== id));
+      addNotification("Twilio configuration deleted successfully", "success");
+    } catch (error) {
+      console.error("Error deleting Twilio config:", error);
+      addNotification("Failed to delete Twilio configuration", "error");
+    }
   };
 
-  const handleSaveTwilio = () => {
+  const handleSaveTwilio = async () => {
     if (
       !twilioForm.accountSid ||
       !twilioForm.authToken ||
@@ -229,32 +343,46 @@ export default function UserSettingsPage() {
       return;
     }
 
-    if (editingTwilio) {
-      setTwilioConfigs((prev) =>
-        prev.map((config) =>
-          config.id === editingTwilio.id
-            ? { ...twilioForm, id: editingTwilio.id }
-            : config
-        )
-      );
-      addNotification("Twilio configuration updated successfully", "success");
-    } else {
-      const newConfig: TwilioConfig = {
-        ...twilioForm,
-        id: Math.random().toString(36).substr(2, 9),
-      };
-      setTwilioConfigs((prev) => [...prev, newConfig]);
-      addNotification("Twilio configuration added successfully", "success");
-    }
+    try {
+      setSavingTwilio(true);
+      if (editingTwilio) {
+        const response = await axios.put(
+          `${API_BASE_URL}twilio/${TENANT_ID}/${editingTwilio.id}`,
+          twilioForm
+        );
+        setTwilioConfigs((prev) =>
+          prev.map((config) =>
+            config.id === editingTwilio.id ? response.data : config
+          )
+        );
+        addNotification("Twilio configuration updated successfully", "success");
+      } else {
+        const response = await axios.post(
+          `${API_BASE_URL}twilio/${TENANT_ID}`,
+          twilioForm
+        );
+        setTwilioConfigs((prev) => [...prev, response.data]);
+        addNotification("Twilio configuration added successfully", "success");
+      }
 
-    setShowTwilioModal(false);
-    setEditingTwilio(null);
+      setShowTwilioModal(false);
+      setEditingTwilio(null);
+    } catch (error: any) {
+      console.error("Error saving Twilio config:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to save Twilio configuration";
+      addNotification(errorMessage, "error");
+    } finally {
+      setSavingTwilio(false);
+    }
   };
 
   const maskString = (str: string) => {
     if (str.length <= 8) return "***************";
     return str.substring(0, 4) + "***************";
   };
+
+  const RequiredAsterisk = () => <span className="text-red-500 ml-1">*</span>;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -513,74 +641,98 @@ export default function UserSettingsPage() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Provider
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        API Key
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Model Name
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Max Tokens
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Temperature
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {llmConfigs.map((config) => (
-                      <tr
-                        key={config.id}
-                        className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        <td className="py-3 px-4 text-sm text-gray-900 dark:text-white capitalize">
-                          {config.provider}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
-                          {maskString(config.apiKey)}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
-                          {config.modelName}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
-                          {config.maxTokens || "N/A"}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
-                          {config.temperature || "N/A"}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEditLLM(config)}
-                              className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteLLM(config.id)}
-                              className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {llmConfigs.length === 0 && (
+                {llmLoading ? (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No LLM configurations found. Add one to get started.
+                    Loading LLM configurations...
                   </div>
+                ) : (
+                  <>
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Provider
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            API Key
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Model Name
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Max Tokens
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Temperature
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {llmConfigs.map((config) => (
+                          <tr
+                            key={config.id}
+                            className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            <td className="py-3 px-4 text-sm text-gray-900 dark:text-white capitalize">
+                              {config.provider}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                              <div className="flex items-center gap-2">
+                                {visibleApiKeys.has(config.id)
+                                  ? config.apiKey
+                                  : maskString(config.apiKey)}
+                                <button
+                                  onClick={() =>
+                                    toggleApiKeyVisibility(config.id)
+                                  }
+                                  className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded transition-colors"
+                                >
+                                  {visibleApiKeys.has(config.id) ? (
+                                    <EyeOff className="w-3 h-3" />
+                                  ) : (
+                                    <Eye className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                              {config.modelname}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                              {config.maxTokens || "N/A"}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                              {config.temperature || "N/A"}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditLLM(config)}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteLLM(config.id)}
+                                  className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {llmConfigs.length === 0 && (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        No LLM configurations found. Add one to get started.
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -599,62 +751,102 @@ export default function UserSettingsPage() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Account SID
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Auth Token
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Phone Number
-                      </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {twilioConfigs.map((config) => (
-                      <tr
-                        key={config.id}
-                        className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
-                          {maskString(config.accountSid)}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
-                          {maskString(config.authToken)}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
-                          {config.phoneNumber}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEditTwilio(config)}
-                              className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTwilio(config.id)}
-                              className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {twilioConfigs.length === 0 && (
+                {twilioLoading ? (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No Twilio configurations found. Add one to get started.
+                    Loading Twilio configurations...
                   </div>
+                ) : (
+                  <>
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Account SID
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Auth Token
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Phone Number
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {twilioConfigs.map((config) => (
+                          <tr
+                            key={config.id}
+                            className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                              <div className="flex items-center gap-2">
+                                {visibleAccountSids.has(config.id)
+                                  ? config.accountSid
+                                  : maskString(config.accountSid)}
+                                <button
+                                  onClick={() =>
+                                    toggleAccountSidVisibility(config.id)
+                                  }
+                                  className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded transition-colors"
+                                >
+                                  {visibleAccountSids.has(config.id) ? (
+                                    <EyeOff className="w-3 h-3" />
+                                  ) : (
+                                    <Eye className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                              <div className="flex items-center gap-2">
+                                {visibleAuthTokens.has(config.id)
+                                  ? config.authToken
+                                  : maskString(config.authToken)}
+                                <button
+                                  onClick={() =>
+                                    toggleAuthTokenVisibility(config.id)
+                                  }
+                                  className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded transition-colors"
+                                >
+                                  {visibleAuthTokens.has(config.id) ? (
+                                    <EyeOff className="w-3 h-3" />
+                                  ) : (
+                                    <Eye className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                              {config.phoneNumber}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditTwilio(config)}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTwilio(config.id)}
+                                  className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {twilioConfigs.length === 0 && (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        No Twilio configurations found. Add one to get started.
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -684,7 +876,7 @@ export default function UserSettingsPage() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Provider *
+                    Provider <RequiredAsterisk />
                   </label>
                   <select
                     value={llmForm.provider}
@@ -701,13 +893,13 @@ export default function UserSettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Model Name *
+                    Model Name <RequiredAsterisk />
                   </label>
                   <input
                     type="text"
-                    value={llmForm.modelName}
+                    value={llmForm.modelname}
                     onChange={(e) =>
-                      setLlmForm({ ...llmForm, modelName: e.target.value })
+                      setLlmForm({ ...llmForm, modelname: e.target.value })
                     }
                     placeholder="e.g., gpt-4, claude-3-opus"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -715,10 +907,10 @@ export default function UserSettingsPage() {
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    API Key *
+                    API Key <RequiredAsterisk />
                   </label>
                   <input
-                    type="password"
+                    type="text"
                     value={llmForm.apiKey}
                     onChange={(e) =>
                       setLlmForm({ ...llmForm, apiKey: e.target.value })
@@ -773,15 +965,24 @@ export default function UserSettingsPage() {
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowLLMModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  disabled={savingLLM}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveLLM}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  disabled={savingLLM}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {editingLLM ? "Update" : "Add"}
+                  {savingLLM ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Please Wait...
+                    </>
+                  ) : (
+                    <>{editingLLM ? "Update" : "Add"}</>
+                  )}
                 </button>
               </div>
             </div>
@@ -811,7 +1012,7 @@ export default function UserSettingsPage() {
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Account SID *
+                    Account SID <RequiredAsterisk />
                   </label>
                   <input
                     type="text"
@@ -828,10 +1029,10 @@ export default function UserSettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Auth Token *
+                    Auth Token <RequiredAsterisk />
                   </label>
                   <input
-                    type="password"
+                    type="text"
                     value={twilioForm.authToken}
                     onChange={(e) =>
                       setTwilioForm({
@@ -845,7 +1046,7 @@ export default function UserSettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Phone Number *
+                    Phone Number <RequiredAsterisk />
                   </label>
                   <input
                     type="tel"
@@ -865,15 +1066,24 @@ export default function UserSettingsPage() {
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowTwilioModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  disabled={savingTwilio}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveTwilio}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  disabled={savingTwilio}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {editingTwilio ? "Update" : "Add"}
+                  {savingTwilio ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Please Wait...
+                    </>
+                  ) : (
+                    <>{editingTwilio ? "Update" : "Add"}</>
+                  )}
                 </button>
               </div>
             </div>
