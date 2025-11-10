@@ -34,6 +34,7 @@ interface FormData {
   name: string;
   persona: string;
   type: string;
+  //twillo_number: number;
   llmModel: string;
   voice: string;
   knowledgeBase: string;
@@ -374,6 +375,37 @@ export default function AIAgentPage() {
                 : "Proactively reaches out to potential customers and leads"}
             </p>
           </div>
+
+
+{/* // Agent 2 */}
+           <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Twillio Number <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.type}
+              onChange={(e) => handleInputChange("type", e.target.value)}
+              disabled={submitting}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                formErrors.type
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
+            >
+              <option value="inbound">+234-9089-67</option>
+              <option value="outbound">+91-897-8645</option>
+            </select>
+            {formErrors.type && (
+              <p className="mt-1 text-sm text-red-500">{formErrors.type}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              {formData.type === "inbound"
+                ? "Handles incoming customer queries and support requests"
+                : "Proactively reaches out to potential customers and leads"}
+            </p>
+          </div>
+
+
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

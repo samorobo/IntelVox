@@ -32,6 +32,11 @@ const navItems = [
     icon: Bot,
   },
   {
+    href: "/campaign",
+    label: "Campaigns",
+    icon: Bot,
+  },
+  {
     href: "/contact-leads",
     label: "Contacts & Leads",
     icon: Contact,
