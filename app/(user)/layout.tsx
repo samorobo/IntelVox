@@ -99,6 +99,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </nav>
 
               <div className="p-4 border-t border-gray-200 dark:border-gray-800">
+                <Link
+                  href="/settings"
+                  className="flex items-center gap-3 px-3 py-2 mb-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 w-full"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                    <UserCircle className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+                  </div>
+
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      John Doe
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      johndoe@email.com
+                    </span>
+                  </div>
+                </Link>
                 <button className="flex items-center gap-3 px-3 py-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 w-full">
                   <LogOut className="w-5 h-5" />
                   <span className="text-sm font-medium">Log Out</span>
