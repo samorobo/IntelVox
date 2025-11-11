@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { Search, Download, Trash2, Plus, Upload, X, Loader2, FileDown } from "lucide-react";
-import axios from "axios";
+import axiosClient from "@/lib/axiosClient";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 
 const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
-const API_BASE_URL = `http://localhost:8000/contact/${TENANT_ID}`;
 
 interface Lead {
   id: string;
@@ -16,7 +15,7 @@ interface Lead {
   date?: string;
   time?: string;
   duration?: string;
-  status?: "converted" | "rejected" | "reschedule" | "handoff" | "on-hold";
+  status?: "converted" | "rejected" | "reschedule" | "handoff" | "on_hold";
   consent?: boolean;
   tenantId?: string;
   createdAt?: string;
@@ -70,12 +69,13 @@ export default function ContactLeadsPage() {
   const fetchContacts = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/`);
+      const response = await axiosClient.get(`/contact/${TENANT_ID}/`);
       setLeads(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching contacts:", error);
+      console.error("Error details:", error.response?.data);
       setMessage({ 
-        text: "Failed to load contacts. Please try again.", 
+        text: error.response?.data?.error || "Failed to load contacts. Please try again.", 
         type: "error" 
       });
     } finally {
@@ -90,14 +90,15 @@ export default function ContactLeadsPage() {
     if (window.confirm(`Are you sure you want to delete ${lead.name}?`)) {
       try {
         setDeleting(id);
-        await axios.delete(`${API_BASE_URL}/${id}`);
+        await axiosClient.delete(`/contact/${TENANT_ID}/${id}`);
         setMessage({ text: "Contact deleted successfully.", type: "success" });
         // Refetch contacts to ensure UI is in sync
         await fetchContacts();
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting contact:", error);
+        console.error("Error details:", error.response?.data);
         setMessage({ 
-          text: "Failed to delete contact. Please try again.", 
+          text: error.response?.data?.error || "Failed to delete contact. Please try again.", 
           type: "error" 
         });
       } finally {
@@ -119,9 +120,9 @@ export default function ContactLeadsPage() {
       rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
       reschedule: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
       handoff: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      "on-hold": "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
+      on_hold: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
     };
-    return colors[status || "on-hold"];
+    return colors[status || "on_hold"];
   };
 
   const formatDateTime = (date?: string, time?: string) => {
@@ -235,18 +236,15 @@ export default function ContactLeadsPage() {
     try {
       setSubmitting(true);
 
-      const now = new Date();
+      // Only send name and number as per API requirements
       const contactPayload = {
         name: addContactFormData.name,
         number: addContactFormData.number,
-        consent: addContactFormData.consent,
-        date: now.toISOString().split('T')[0], // YYYY-MM-DD
-        time: now.toTimeString().split(' ')[0].substring(0, 5), // HH:MM
-        duration: "00:00",
-        status: "on-hold"
       };
 
-      await axios.post(`${API_BASE_URL}/`, contactPayload);
+      console.log("Creating contact with payload:", contactPayload);
+      const response = await axiosClient.post(`/contact/${TENANT_ID}/`, contactPayload);
+      console.log("Contact created successfully:", response.data);
       
       setMessage({ text: "Contact added successfully!", type: "success" });
       handleCloseAddContactModal();
@@ -255,6 +253,8 @@ export default function ContactLeadsPage() {
       await fetchContacts();
     } catch (error: any) {
       console.error("Error adding contact:", error);
+      console.error("Error details:", error.response?.data);
+      console.error("Error status:", error.response?.status);
       const errorMessage = error.response?.data?.error || "Failed to add contact. Please try again.";
       setMessage({ text: errorMessage, type: "error" });
     } finally {
@@ -307,7 +307,7 @@ export default function ContactLeadsPage() {
       formData.append('file', uploadedFile);
       
       // TODO: Update this endpoint when bulk upload is implemented in backend
-      await axios.post(`${API_BASE_URL}/bulk-upload`, formData, {
+      await axiosClient.post(`/contact/${TENANT_ID}/bulk-upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -446,7 +446,7 @@ export default function ContactLeadsPage() {
                             lead.status
                           )}`}
                         >
-                          {lead.status || "on-hold"}
+                          {lead.status?.replace("_", " ") || "on hold"}
                         </span>
                       </td>
                       <td className="py-4 px-6">

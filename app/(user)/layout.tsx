@@ -15,6 +15,7 @@ import {
   PhoneCall,
   Bot,
   Contact,
+  UserPlus,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
@@ -40,6 +41,11 @@ const navItems = [
     href: "/contact-leads",
     label: "Contacts & Leads",
     icon: Contact,
+  },
+  {
+    href: "/human-handoff",
+    label: "Human Handoff",
+    icon: UserPlus,
   },
   {
     href: "/calls",
