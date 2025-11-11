@@ -91,9 +91,9 @@ export default function HumanHandoffPage() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Human Handoff</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">View and manage all scheduled human callbacks and inquiries.</p>
           </div>
-          <button onClick={() => setIsScheduleModalOpen(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+          {/* <button onClick={() => setIsScheduleModalOpen(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
             <Calendar className="w-4 h-4" />Schedule Callback
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -178,10 +178,10 @@ export default function HumanHandoffPage() {
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => !submitting && setIsScheduleModalOpen(false)}></div>
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-              {/* <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Schedule Callback</h3>
                 <button onClick={() => !submitting && setIsScheduleModalOpen(false)} className="text-gray-400 hover:text-gray-500"><X className="w-5 h-5" /></button>
-              </div> */}
+              </div>
               <div className="px-6 py-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact Name <span className="text-red-500">*</span></label>
