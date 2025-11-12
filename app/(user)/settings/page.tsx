@@ -1,0 +1,885 @@
+"use client";
+
+import { useState } from "react";
+import { Camera, Edit, Trash2, Plus, X } from "lucide-react";
+import DashboardHeader from "@/components/DashboardHeader";
+
+interface LLMConfig {
+  id: string;
+  provider: string;
+  apiKey: string;
+  modelName: string;
+  maxTokens: number | null;
+  temperature: number | null;
+}
+
+interface TwilioConfig {
+  id: string;
+  accountSid: string;
+  authToken: string;
+  phoneNumber: string;
+}
+
+interface Notification {
+  id: string;
+  message: string;
+  type: "success" | "error" | "info";
+  timestamp: number;
+}
+
+export default function UserSettingsPage() {
+  const [user, setUser] = useState({
+    name: "John Doe",
+    email: "john.doe@example.com",
+    avatarUrl: "",
+  });
+
+  const [basicDetails, setBasicDetails] = useState({
+    name: "John Doe",
+    email: "john.doe@example.com",
+    phone: "+1234567890",
+    company: "Tech Corp",
+    location: "New York, USA",
+    timezone: "UTC-5",
+  });
+
+  const [handConfig, setHandConfig] = useState({
+    handName: "Default Hand",
+    handType: "Voice Assistant",
+    language: "English",
+    greeting: "Hello! How can I help you today?",
+  });
+
+  const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([
+    {
+      id: "1",
+      provider: "openai",
+      apiKey: "sk-proj-***************",
+      modelName: "gpt-4",
+      maxTokens: 2000,
+      temperature: 0.7,
+    },
+  ]);
+
+  const [twilioConfigs, setTwilioConfigs] = useState<TwilioConfig[]>([
+    {
+      id: "1",
+      accountSid: "AC***************",
+      authToken: "***************",
+      phoneNumber: "+1234567890",
+    },
+  ]);
+
+  const [activeTab, setActiveTab] = useState<"llm" | "twilio">("llm");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showLLMModal, setShowLLMModal] = useState(false);
+  const [showTwilioModal, setShowTwilioModal] = useState(false);
+  const [editingLLM, setEditingLLM] = useState<LLMConfig | null>(null);
+  const [editingTwilio, setEditingTwilio] = useState<TwilioConfig | null>(null);
+
+  const [llmForm, setLlmForm] = useState<Omit<LLMConfig, "id">>({
+    provider: "openai",
+    apiKey: "",
+    modelName: "",
+    maxTokens: null,
+    temperature: null,
+  });
+
+  const [twilioForm, setTwilioForm] = useState<Omit<TwilioConfig, "id">>({
+    accountSid: "",
+    authToken: "",
+    phoneNumber: "",
+  });
+
+  const addNotification = (
+    message: string,
+    type: "success" | "error" | "info"
+  ) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newNotification: Notification = {
+      id,
+      message,
+      type,
+      timestamp: Date.now(),
+    };
+
+    setNotifications((prev) => [newNotification, ...prev]);
+
+    setTimeout(() => {
+      removeNotification(id);
+    }, 5000);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications((prev) =>
+      prev.filter((notification) => notification.id !== id)
+    );
+  };
+
+  const handleBasicDetailsChange = (field: string, value: string) => {
+    setBasicDetails((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleHandConfigChange = (field: string, value: string) => {
+    setHandConfig((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveBasicDetails = () => {
+    setUser({ ...user, name: basicDetails.name, email: basicDetails.email });
+    addNotification("Basic details updated successfully", "success");
+  };
+
+  const handleSaveHandConfig = () => {
+    addNotification("Hand configuration updated successfully", "success");
+  };
+
+  const handleAvatarChange = () => {
+    addNotification("Avatar upload feature coming soon", "info");
+  };
+
+  const handleAddLLM = () => {
+    setEditingLLM(null);
+    setLlmForm({
+      provider: "openai",
+      apiKey: "",
+      modelName: "",
+      maxTokens: null,
+      temperature: null,
+    });
+    setShowLLMModal(true);
+  };
+
+  const handleEditLLM = (config: LLMConfig) => {
+    setEditingLLM(config);
+    setLlmForm({
+      provider: config.provider,
+      apiKey: config.apiKey,
+      modelName: config.modelName,
+      maxTokens: config.maxTokens,
+      temperature: config.temperature,
+    });
+    setShowLLMModal(true);
+  };
+
+  const handleDeleteLLM = (id: string) => {
+    setLlmConfigs((prev) => prev.filter((config) => config.id !== id));
+    addNotification("LLM configuration deleted successfully", "success");
+  };
+
+  const handleSaveLLM = () => {
+    if (!llmForm.provider || !llmForm.apiKey || !llmForm.modelName) {
+      addNotification("Please fill in all required fields", "error");
+      return;
+    }
+
+    if (editingLLM) {
+      setLlmConfigs((prev) =>
+        prev.map((config) =>
+          config.id === editingLLM.id
+            ? { ...llmForm, id: editingLLM.id }
+            : config
+        )
+      );
+      addNotification("LLM configuration updated successfully", "success");
+    } else {
+      const newConfig: LLMConfig = {
+        ...llmForm,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      setLlmConfigs((prev) => [...prev, newConfig]);
+      addNotification("LLM configuration added successfully", "success");
+    }
+
+    setShowLLMModal(false);
+    setEditingLLM(null);
+  };
+
+  const handleAddTwilio = () => {
+    setEditingTwilio(null);
+    setTwilioForm({
+      accountSid: "",
+      authToken: "",
+      phoneNumber: "",
+    });
+    setShowTwilioModal(true);
+  };
+
+  const handleEditTwilio = (config: TwilioConfig) => {
+    setEditingTwilio(config);
+    setTwilioForm({
+      accountSid: config.accountSid,
+      authToken: config.authToken,
+      phoneNumber: config.phoneNumber,
+    });
+    setShowTwilioModal(true);
+  };
+
+  const handleDeleteTwilio = (id: string) => {
+    setTwilioConfigs((prev) => prev.filter((config) => config.id !== id));
+    addNotification("Twilio configuration deleted successfully", "success");
+  };
+
+  const handleSaveTwilio = () => {
+    if (
+      !twilioForm.accountSid ||
+      !twilioForm.authToken ||
+      !twilioForm.phoneNumber
+    ) {
+      addNotification("Please fill in all required fields", "error");
+      return;
+    }
+
+    if (editingTwilio) {
+      setTwilioConfigs((prev) =>
+        prev.map((config) =>
+          config.id === editingTwilio.id
+            ? { ...twilioForm, id: editingTwilio.id }
+            : config
+        )
+      );
+      addNotification("Twilio configuration updated successfully", "success");
+    } else {
+      const newConfig: TwilioConfig = {
+        ...twilioForm,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      setTwilioConfigs((prev) => [...prev, newConfig]);
+      addNotification("Twilio configuration added successfully", "success");
+    }
+
+    setShowTwilioModal(false);
+    setEditingTwilio(null);
+  };
+
+  const maskString = (str: string) => {
+    if (str.length <= 8) return "***************";
+    return str.substring(0, 4) + "***************";
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <DashboardHeader title="Settings Page" />
+
+      <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+        {notifications.map((notification) => (
+          <div
+            key={notification.id}
+            className={`flex items-start gap-3 p-4 rounded-lg shadow-lg border backdrop-blur-sm transform transition-all duration-300 animate-in slide-in-from-right-full ${
+              notification.type === "success"
+                ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300"
+                : notification.type === "error"
+                ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300"
+                : "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300"
+            }`}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{notification.message}</p>
+            </div>
+            <button
+              onClick={() => removeNotification(notification.id)}
+              className="flex-shrink-0 p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="max-w-4xl mx-auto p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 mb-6">
+          <div className="flex flex-col items-center">
+            <div className="relative group">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold">
+                {user.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()}
+              </div>
+              <button
+                onClick={handleAvatarChange}
+                className="absolute bottom-0 right-0 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
+            </div>
+            <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
+              {user.name}
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400">{user.email}</p>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+            Basic Details
+          </h3>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Name
+              </label>
+              <input
+                type="text"
+                value={basicDetails.name}
+                onChange={(e) =>
+                  handleBasicDetailsChange("name", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={basicDetails.email}
+                onChange={(e) =>
+                  handleBasicDetailsChange("email", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Phone
+              </label>
+              <input
+                type="tel"
+                value={basicDetails.phone}
+                onChange={(e) =>
+                  handleBasicDetailsChange("phone", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Company
+              </label>
+              <input
+                type="text"
+                value={basicDetails.company}
+                onChange={(e) =>
+                  handleBasicDetailsChange("company", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Location
+              </label>
+              <input
+                type="text"
+                value={basicDetails.location}
+                onChange={(e) =>
+                  handleBasicDetailsChange("location", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Timezone
+              </label>
+              <input
+                type="text"
+                value={basicDetails.timezone}
+                onChange={(e) =>
+                  handleBasicDetailsChange("timezone", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveBasicDetails}
+              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+            Human Handoff Configuration
+          </h3>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Hand Name
+              </label>
+              <input
+                type="text"
+                value={handConfig.handName}
+                onChange={(e) =>
+                  handleHandConfigChange("handName", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Hand Type
+              </label>
+              <input
+                type="text"
+                value={handConfig.handType}
+                onChange={(e) =>
+                  handleHandConfigChange("handType", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Language
+              </label>
+              <input
+                type="text"
+                value={handConfig.language}
+                onChange={(e) =>
+                  handleHandConfigChange("language", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Greeting Message
+              </label>
+              <input
+                type="text"
+                value={handConfig.greeting}
+                onChange={(e) =>
+                  handleHandConfigChange("greeting", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveHandConfig}
+              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+            Connect Your Account
+          </h3>
+
+          <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab("llm")}
+              className={`pb-3 px-2 font-medium transition-colors ${
+                activeTab === "llm"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              LLM
+            </button>
+            <button
+              onClick={() => setActiveTab("twilio")}
+              className={`pb-3 px-2 font-medium transition-colors ${
+                activeTab === "twilio"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              Twilio
+            </button>
+          </div>
+
+          {activeTab === "llm" && (
+            <div>
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={handleAddLLM}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add LLM
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Provider
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        API Key
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Model Name
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Max Tokens
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Temperature
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {llmConfigs.map((config) => (
+                      <tr
+                        key={config.id}
+                        className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        <td className="py-3 px-4 text-sm text-gray-900 dark:text-white capitalize">
+                          {config.provider}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                          {maskString(config.apiKey)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                          {config.modelName}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                          {config.maxTokens || "N/A"}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                          {config.temperature || "N/A"}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditLLM(config)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteLLM(config.id)}
+                              className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {llmConfigs.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    No LLM configurations found. Add one to get started.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "twilio" && (
+            <div>
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={handleAddTwilio}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Twilio
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Account SID
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Auth Token
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Phone Number
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {twilioConfigs.map((config) => (
+                      <tr
+                        key={config.id}
+                        className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                          {maskString(config.accountSid)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                          {maskString(config.authToken)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                          {config.phoneNumber}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditTwilio(config)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTwilio(config.id)}
+                              className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {twilioConfigs.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    No Twilio configurations found. Add one to get started.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showLLMModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {editingLLM
+                  ? "Edit LLM Configuration"
+                  : "Add LLM Configuration"}
+              </h3>
+              <button
+                onClick={() => setShowLLMModal(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Provider *
+                  </label>
+                  <select
+                    value={llmForm.provider}
+                    onChange={(e) =>
+                      setLlmForm({ ...llmForm, provider: e.target.value })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="azure">Azure</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Model Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={llmForm.modelName}
+                    onChange={(e) =>
+                      setLlmForm({ ...llmForm, modelName: e.target.value })
+                    }
+                    placeholder="e.g., gpt-4, claude-3-opus"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    API Key *
+                  </label>
+                  <input
+                    type="password"
+                    value={llmForm.apiKey}
+                    onChange={(e) =>
+                      setLlmForm({ ...llmForm, apiKey: e.target.value })
+                    }
+                    placeholder="Enter your API key"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Max Tokens
+                  </label>
+                  <input
+                    type="number"
+                    value={llmForm.maxTokens || ""}
+                    onChange={(e) =>
+                      setLlmForm({
+                        ...llmForm,
+                        maxTokens: e.target.value
+                          ? parseInt(e.target.value)
+                          : null,
+                      })
+                    }
+                    placeholder="e.g., 2000"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Temperature (0.0 - 1.0)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={llmForm.temperature || ""}
+                    onChange={(e) =>
+                      setLlmForm({
+                        ...llmForm,
+                        temperature: e.target.value
+                          ? parseFloat(e.target.value)
+                          : null,
+                      })
+                    }
+                    placeholder="e.g., 0.7"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowLLMModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveLLM}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  {editingLLM ? "Update" : "Add"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTwilioModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {editingTwilio
+                  ? "Edit Twilio Configuration"
+                  : "Add Twilio Configuration"}
+              </h3>
+              <button
+                onClick={() => setShowTwilioModal(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Account SID *
+                  </label>
+                  <input
+                    type="text"
+                    value={twilioForm.accountSid}
+                    onChange={(e) =>
+                      setTwilioForm({
+                        ...twilioForm,
+                        accountSid: e.target.value,
+                      })
+                    }
+                    placeholder="AC..."
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Auth Token *
+                  </label>
+                  <input
+                    type="password"
+                    value={twilioForm.authToken}
+                    onChange={(e) =>
+                      setTwilioForm({
+                        ...twilioForm,
+                        authToken: e.target.value,
+                      })
+                    }
+                    placeholder="Enter your auth token"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    value={twilioForm.phoneNumber}
+                    onChange={(e) =>
+                      setTwilioForm({
+                        ...twilioForm,
+                        phoneNumber: e.target.value,
+                      })
+                    }
+                    placeholder="+1234567890"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowTwilioModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveTwilio}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  {editingTwilio ? "Update" : "Add"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

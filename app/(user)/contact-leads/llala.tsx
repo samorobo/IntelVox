@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { Search, Download, Trash2, Plus, Upload, X, Loader2, FileDown } from "lucide-react";
-import axiosClient from "@/lib/axiosClient";
-import { PhoneInput } from "react-international-phone";
-import "react-international-phone/style.css";
+import axios from "axios";
 
 const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
+const API_BASE_URL = `http://localhost:8000/contact/${TENANT_ID}`;
 
 interface Lead {
   id: string;
@@ -15,7 +14,7 @@ interface Lead {
   date?: string;
   time?: string;
   duration?: string;
-  status?: "converted" | "rejected" | "reschedule" | "handoff" | "on_hold";
+  status?: "converted" | "rejected" | "reschedule" | "handoff" | "on-hold";
   consent?: boolean;
   tenantId?: string;
   createdAt?: string;
@@ -69,13 +68,12 @@ export default function ContactLeadsPage() {
   const fetchContacts = async () => {
     try {
       setLoading(true);
-      const response = await axiosClient.get(`/contact/${TENANT_ID}/`);
+      const response = await axios.get(`${API_BASE_URL}/`);
       setLeads(response.data);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching contacts:", error);
-      console.error("Error details:", error.response?.data);
       setMessage({ 
-        text: error.response?.data?.error || "Failed to load contacts. Please try again.", 
+        text: "Failed to load contacts. Please try again.", 
         type: "error" 
       });
     } finally {
@@ -90,15 +88,14 @@ export default function ContactLeadsPage() {
     if (window.confirm(`Are you sure you want to delete ${lead.name}?`)) {
       try {
         setDeleting(id);
-        await axiosClient.delete(`/contact/${TENANT_ID}/${id}`);
+        await axios.delete(`${API_BASE_URL}/${id}`);
         setMessage({ text: "Contact deleted successfully.", type: "success" });
         // Refetch contacts to ensure UI is in sync
         await fetchContacts();
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error deleting contact:", error);
-        console.error("Error details:", error.response?.data);
         setMessage({ 
-          text: error.response?.data?.error || "Failed to delete contact. Please try again.", 
+          text: "Failed to delete contact. Please try again.", 
           type: "error" 
         });
       } finally {
@@ -120,9 +117,9 @@ export default function ContactLeadsPage() {
       rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
       reschedule: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
       handoff: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      on_hold: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
+      "on-hold": "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
     };
-    return colors[status || "on_hold"];
+    return colors[status || "on-hold"];
   };
 
   const formatDateTime = (date?: string, time?: string) => {
@@ -236,15 +233,18 @@ export default function ContactLeadsPage() {
     try {
       setSubmitting(true);
 
-      // Only send name and number as per API requirements
+      const now = new Date();
       const contactPayload = {
         name: addContactFormData.name,
         number: addContactFormData.number,
+        consent: addContactFormData.consent,
+        date: now.toISOString().split('T')[0], // YYYY-MM-DD
+        time: now.toTimeString().split(' ')[0].substring(0, 5), // HH:MM
+        duration: "00:00",
+        status: "on-hold"
       };
 
-      console.log("Creating contact with payload:", contactPayload);
-      const response = await axiosClient.post(`/contact/${TENANT_ID}/`, contactPayload);
-      console.log("Contact created successfully:", response.data);
+      await axios.post(`${API_BASE_URL}/`, contactPayload);
       
       setMessage({ text: "Contact added successfully!", type: "success" });
       handleCloseAddContactModal();
@@ -253,8 +253,6 @@ export default function ContactLeadsPage() {
       await fetchContacts();
     } catch (error: any) {
       console.error("Error adding contact:", error);
-      console.error("Error details:", error.response?.data);
-      console.error("Error status:", error.response?.status);
       const errorMessage = error.response?.data?.error || "Failed to add contact. Please try again.";
       setMessage({ text: errorMessage, type: "error" });
     } finally {
@@ -307,7 +305,7 @@ export default function ContactLeadsPage() {
       formData.append('file', uploadedFile);
       
       // TODO: Update this endpoint when bulk upload is implemented in backend
-      await axiosClient.post(`/contact/${TENANT_ID}/bulk-upload`, formData, {
+      await axios.post(`${API_BASE_URL}/bulk-upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -327,6 +325,7 @@ export default function ContactLeadsPage() {
       setSubmitting(false);
     }
   };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6">
@@ -372,7 +371,8 @@ export default function ContactLeadsPage() {
 
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                disabled={leads.length === 0}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="w-4 h-4" />
                 Export
@@ -391,8 +391,7 @@ export default function ContactLeadsPage() {
             </div>
           </div>
 
-
-                {loading ? (
+          {loading ? (
             <div className="flex flex-col items-center justify-center py-16">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
               <p className="text-gray-500 dark:text-gray-400">Loading contacts...</p>
@@ -446,7 +445,7 @@ export default function ContactLeadsPage() {
                             lead.status
                           )}`}
                         >
-                          {lead.status?.replace("_", " ") || "on hold"}
+                          {lead.status || "on-hold"}
                         </span>
                       </td>
                       <td className="py-4 px-6">
@@ -484,134 +483,130 @@ export default function ContactLeadsPage() {
         </div>
       </div>
 
+      {/* Add Contact Modal */}
+      {isAddContactModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={handleCloseAddContactModal}
+          ></div>
 
-       {/* Add Contact Modal */}
-            {isAddContactModalOpen && (
-              <div className="fixed inset-0 z-50 overflow-y-auto">
-                <div
-                  className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Add Contact
+                </h3>
+                <button
                   onClick={handleCloseAddContactModal}
-                ></div>
-      
-                <div className="flex min-h-full items-center justify-center p-4">
-                  <div
-                    className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Add Contact
-                      </h3>
-                      <button
-                        onClick={handleCloseAddContactModal}
-                        disabled={submitting}
-                        className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-      
-                    <div className="px-6 py-4 space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Name <span className="text-red-500">*</span>
-                        </label>
-			
-                        <input
-                          type="text"
-                          value={addContactFormData.name}
-                          onChange={(e) => handleAddContactInputChange("name", e.target.value)}
-                          disabled={submitting}
-                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            addContactFormErrors.name
-                              ? "border-red-500 focus:ring-red-500"
-                              : "border-gray-300 dark:border-gray-600"
-                          }`}
-                          placeholder="Enter contact name"
-                        />
-                        {addContactFormErrors.name && (
-                          <p className="mt-1 text-sm text-red-500">
-                            {addContactFormErrors.name}
-                          </p>
-                        )}
-                      </div>
-      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Phone Number <span className="text-red-500">*</span>
-                        </label>
-                        
-			 <PhoneInput
-                    defaultCountry="ng"
-                    value={addContactFormData.number}
-                    onChange={(phone) => handleAddContactInputChange("number", phone)}
+                  disabled={submitting}
+                  className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={addContactFormData.name}
+                    onChange={(e) => handleAddContactInputChange("name", e.target.value)}
                     disabled={submitting}
-                    className={`w-full ${
-                      addContactFormErrors.number ? "phone-input-error" : ""
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      addContactFormErrors.name
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-gray-300 dark:border-gray-600"
                     }`}
-                    inputClassName="w-full"
-                    countrySelectorStyleProps={{
-                      buttonClassName: "country-selector-button"
-                    }}
-                  />	
-                        {addContactFormErrors.number && (
-                          <p className="mt-1 text-sm text-red-500">
-                            {addContactFormErrors.number}
-                          </p>
-                        )}
-                      </div>
-      
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Consent
-                        </label>
-                        <button
-                          onClick={() => handleAddContactInputChange("consent", !addContactFormData.consent)}
-                          disabled={submitting}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            addContactFormData.consent
-                              ? "bg-blue-600"
-                              : "bg-gray-300 dark:bg-gray-600"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              addContactFormData.consent
-                                ? "translate-x-6"
-                                : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-      
-                    <div className="flex justify-end gap-3 mt-6 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                      <button
-                        onClick={handleCloseAddContactModal}
-                        disabled={submitting}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleAddContact}
-                        disabled={submitting}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                      >
-                        {submitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Adding...
-                          </>
-                        ) : (
-                          "Add Contact"
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                    placeholder="Enter contact name"
+                  />
+                  {addContactFormErrors.name && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {addContactFormErrors.name}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={addContactFormData.number}
+                    onChange={(e) => handleAddContactInputChange("number", e.target.value)}
+                    disabled={submitting}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      addContactFormErrors.number
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-gray-300 dark:border-gray-600"
+                    }`}
+                    placeholder="+1234567890"
+                  />
+                  {addContactFormErrors.number && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {addContactFormErrors.number}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Consent
+                  </label>
+                  <button
+                    onClick={() => handleAddContactInputChange("consent", !addContactFormData.consent)}
+                    disabled={submitting}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      addContactFormData.consent
+                        ? "bg-blue-600"
+                        : "bg-gray-300 dark:bg-gray-600"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        addContactFormData.consent
+                          ? "translate-x-6"
+                          : "translate-x-1"
+                      }`}
+                    />
+                  </button>
                 </div>
               </div>
-            )}
+
+              <div className="flex justify-end gap-3 mt-6 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleCloseAddContactModal}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddContact}
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    "Add Contact"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Upload Modal */}
       {isBulkUploadModalOpen && (
@@ -623,7 +618,7 @@ export default function ContactLeadsPage() {
 
           <div className="flex min-h-full items-center justify-center p-4">
             <div
-              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl animate-fadeIn"
+              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -640,35 +635,6 @@ export default function ContactLeadsPage() {
               </div>
 
               <div className="px-6 py-6 space-y-8">
-                {/* Step 1 */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                      <FileDown className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
-                      Step 1. Download the Intelvox CSV template file
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                      Choose if you want to download a blank Intelvox CSV template file, or a CSV file with all your current Intelvox products.
-                    </p>
-                    <button
-                      onClick={handleDownloadTemplate}
-                      disabled={submitting}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-600 dark:border-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <FileDown className="w-4 h-4" />
-                      Download CSV File
-                    </button>
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-gray-200 dark:border-gray-700"></div>
-
-                {/* Step 2 */}
                 <div className="flex gap-4">
                   <div className="flex-shrink-0">
                     <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -677,10 +643,10 @@ export default function ContactLeadsPage() {
                   </div>
                   <div className="flex-1">
                     <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
-                      Step 2. Upload your products
+                      Step 2. Upload your contacts
                     </h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                      Add or edit your product info in the Intelvox CSV file, making sure you don't add or delete columns. Once your Intelvox CSV file is ready to go, upload it here.
+                      Add your contact info in the CSV file, then upload it here.
                     </p>
                     <div className="space-y-3">
                       <input
@@ -750,4 +716,30 @@ export default function ContactLeadsPage() {
       )}
     </div>
   );
-}
+}-center">
+                      <FileDown className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                      Step 1. Download the CSV template file
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Download a blank CSV template to add your contacts.
+                    </p>
+                    <button
+                      onClick={handleDownloadTemplate}
+                      disabled={submitting}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-600 dark:border-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FileDown className="w-4 h-4" />
+                      Download CSV Template
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200 dark:border-gray-700"></div>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify
