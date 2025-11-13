@@ -9,15 +9,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ---------------------------
-      # Step 1: Checkout the code
-      # ---------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ---------------------------
-      # Step 2: Setup Node.js
-      # ---------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -28,10 +22,7 @@ jobs:
           npm ci
           npm run build
 
-      # ---------------------------
-      # Step 3: Test SSH connection first
-      # ---------------------------
-      - name: Test SSH connection (stability check)
+      - name: Test SSH connection
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.HOST }}
@@ -42,9 +33,6 @@ jobs:
             echo "🔐 SSH connection test successful on $(hostname)"
             uptime
 
-      # ---------------------------
-      # Step 4: Upload clean code to VPS (with retry)
-      # ---------------------------
       - name: Upload source code to VPS (attempt 1)
         id: upload1
         continue-on-error: true
@@ -61,7 +49,7 @@ jobs:
           timeout: 180s
           command_timeout: 180s
 
-      - name: Retry upload if first attempt failed
+      - name: Retry upload if failed
         if: steps.upload1.outcome == 'failure'
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -72,14 +60,10 @@ jobs:
           source: "."
           target: "/var/www/intelvox_frontend_temp"
           overwrite: true
-          debug: true
           timeout: 180s
           command_timeout: 180s
 
-      # ---------------------------
-      # Step 5: SSH into VPS and Deploy
-      # ---------------------------
-      - name: Deploy on VPS and verify
+      - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.HOST }}
@@ -88,103 +72,68 @@ jobs:
           port: 22
           script: |
             echo "🚀 Starting frontend deployment..."
-
             mkdir -p /var/www
-
-            echo "🧹 Cleaning up previous deployment (keeping node_modules and logs)"
+            
             if [ -d "/var/www/intelvox_frontend" ]; then
               rm -rf /var/www/intelvox_frontend_old
               mv /var/www/intelvox_frontend /var/www/intelvox_frontend_old
             fi
-
-            echo "📦 Moving new build to /var/www/intelvox_frontend"
+            
             mv /var/www/intelvox_frontend_temp /var/www/intelvox_frontend
-
-            echo "🔹 Moving to project folder"
             cd /var/www/intelvox_frontend
-
-            echo "🔹 Installing dependencies"
+            
+            echo "🔹 Installing dependencies..."
             npm ci
-
-            echo "🔹 Building Next.js application"
+            
+            echo "🔹 Building application..."
             npm run build
-
-            echo "🔹 Creating .env file"
-            cat > .env.local <<EOF
-            NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
-            EOF
-
-            echo "🔹 Ensuring PM2 is installed"
-            if ! command -v pm2 &> /dev/null; then
-              npm install -g pm2
-            fi
-
-            echo "🔹 Stopping any existing processes on port 3000"
-            sudo lsof -ti:3000 | xargs -r sudo kill -9 || echo "No processes found on port 3000"
-
-            echo "🔹 Cleaning up ALL PM2 intelvox_frontend processes"
-            # Delete ALL instances of intelvox_frontend (in case there are duplicates)
-            pm2 delete all || echo "No PM2 processes to delete"
-            # Kill PM2 daemon to ensure clean state
-            pm2 kill
+            
+            echo "🔹 Installing PM2 globally..."
+            npm install -g pm2
+            
+            echo "🔹 Stopping processes on port 3000..."
+            sudo lsof -ti:3000 | xargs -r sudo kill -9 || true
+            
+            echo "🔹 Cleaning PM2 processes..."
+            pm2 delete all || true
+            pm2 kill || true
             sleep 3
-
-            echo "🔹 Starting frontend process (correct directory)"
-            cd /var/www/intelvox_frontend
-            # Ensure we start fresh with only ONE instance
+            
+            echo "🔹 Starting application..."
             pm2 start npm --name "intelvox_frontend" --instances 1 -- start
             pm2 save
-
-            echo "⏳ Waiting for app to boot..."
+            
             sleep 8
-
-            echo "🔍 Checking what's running on port 3000..."
-            netstat -tlnp | grep :3000 || echo "Nothing on port 3000"
-
-            echo "🔍 Checking PM2 process status..."
+            
+            echo "🔍 Checking process status..."
             pm2 status
-
-            echo "🔍 Checking health endpoint..."
-            if ! pm2 show intelvox_frontend | grep -q "online"; then
-              echo "❌ PM2 process is not running properly"
-              pm2 logs intelvox_frontend --lines 20
-              exit 1
-            fi
-
+            
             RETRIES=0
             MAX_RETRIES=10
-            HEALTH_CHECK_SUCCESS=false
-
+            
             while [ $RETRIES -lt $MAX_RETRIES ]; do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
-              if [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; then
-                echo "✅ Health check passed! Frontend is responding on localhost:3000."
-                HEALTH_CHECK_SUCCESS=true
-                break
-              else
-                echo "🔄 Health check attempt $((RETRIES + 1))/$MAX_RETRIES - HTTP $STATUS"
-                RETRIES=$((RETRIES + 1))
-                sleep 3
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "000")
+              if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "404" ]; then
+                echo "✅ Health check passed!"
+                rm -rf /var/www/intelvox_frontend_old
+                echo "🎉 Deployment successful!"
+                exit 0
               fi
+              echo "⏳ Waiting... (attempt $((RETRIES + 1))/$MAX_RETRIES)"
+              RETRIES=$((RETRIES + 1))
+              sleep 3
             done
-
-            if [ "$HEALTH_CHECK_SUCCESS" = "false" ]; then
-              echo "❌ Health check failed after $MAX_RETRIES attempts. Checking logs..."
-              pm2 logs intelvox_frontend --lines 20
-              echo "Restoring previous version..."
+            
+            echo "❌ Health check failed"
+            pm2 logs intelvox_frontend --lines 20
+            
+            if [ -d "/var/www/intelvox_frontend_old" ]; then
+              echo "⏮️  Rolling back..."
               pm2 delete intelvox_frontend || true
               rm -rf /var/www/intelvox_frontend
-              if [ -d "/var/www/intelvox_frontend_old" ]; then
-                mv /var/www/intelvox_frontend_old /var/www/intelvox_frontend
-                cd /var/www/intelvox_frontend
-                pm2 start npm --name "intelvox_frontend" -- start
-                pm2 save
-              fi
-              echo "⚠️ Rolled back to previous stable release."
-              exit 1
-            else
-              echo "🧽 Cleaning old backup folder"
-              rm -rf /var/www/intelvox_frontend_old
+              mv /var/www/intelvox_frontend_old /var/www/intelvox_frontend
+              cd /var/www/intelvox_frontend
+              pm2 start npm --name "intelvox_frontend" -- start
+              pm2 save
             fi
-
-            echo "🎉 Deployment successful and verified!"
+            exit 1
