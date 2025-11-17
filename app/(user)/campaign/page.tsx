@@ -95,6 +95,7 @@ export default function CampaignsPage() {
   };
 
   const fetchAgents = async () => {
+    
     try {
       const response = await axios.get(`${API_BASE_URL}agents`);
       setAiAgents(response.data);
