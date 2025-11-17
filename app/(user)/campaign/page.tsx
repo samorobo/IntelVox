@@ -172,6 +172,24 @@ export default function CampaignsPage() {
     return Object.keys(errors).length === 0;
   };
 
+  const handleStartCall = async (campaignId: string) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}call/${TENANT_ID}/outbound`,
+        { campaignId }
+      );
+      toast.success("Outbound call started successfully");
+      console.log("Call response:", response.data);
+    } catch (error: any) {
+      console.error("Error starting outbound call:", error);
+      toast.error(
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to start outbound call"
+      );
+    }
+  };
+
   const handleCreateCampaign = async () => {
     if (!validateForm()) return;
     setSubmitting(true);
@@ -316,48 +334,82 @@ export default function CampaignsPage() {
       {/* View Modal - Slides up from bottom */}
       {viewCampaign && (
         <div className="fixed inset-0 z-50">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setViewCampaign(null)}></div>
+          <div className="fixed inset-0 bg-black/30" onClick={() => setViewCampaign(null)}></div>
           <div className="fixed bottom-0 left-0 right-0 animate-slide-up">
-            <div className="bg-gray-900 text-white rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-8 py-6 flex justify-between">
+            <div className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto border-t border-gray-200 dark:border-gray-700">
+              <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6 flex justify-between items-center">
                 <div>
-                  <h2 className="text-2xl font-bold mb-2">{viewCampaign.name}</h2>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${viewCampaign.type === "Inbound" ? "bg-blue-900/50 text-blue-300" : "bg-purple-900/50 text-purple-300"}`}>{viewCampaign.type} Campaign</span>
+                  <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">{viewCampaign.name}</h2>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${viewCampaign.type === "Inbound" ? "bg-blue-50 text-blue-700 border border-blue-100" : "bg-purple-50 text-purple-700 border border-purple-100"}`}>
+                    {viewCampaign.type} Campaign
+                  </span>
                 </div>
-                <button onClick={() => setViewCampaign(null)} className="text-gray-400 hover:text-white"><X className="w-6 h-6" /></button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleStartCall(viewCampaign.id)}
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                    title="Start outbound call"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewCampaign(null)}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
               <div className="px-8 py-6">
-                <div className="grid grid-cols-2 gap-6 mb-8">
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-3 mb-2"><Calendar className="w-5 h-5 text-blue-400" /><h3 className="text-sm text-gray-400">Duration</h3></div>
-                    <p className="text-lg font-semibold">{viewCampaign.startDate} - {viewCampaign.endDate}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Calendar className="w-5 h-5 text-blue-500" />
+                      <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300">Duration</h3>
+                    </div>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {viewCampaign.startDate} - {viewCampaign.endDate}
+                    </p>
                   </div>
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-3 mb-2"><Users className="w-5 h-5 text-purple-400" /><h3 className="text-sm text-gray-400">AI Agent</h3></div>
-                    <p className="text-lg font-semibold">{viewCampaign.aiAgent}</p>
-                  </div>
-                </div>
-                <h3 className="text-lg font-semibold mb-4">Performance Metrics</h3>
-                <div className="grid grid-cols-3 gap-4 mb-8">
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-2 mb-2"><Phone className="w-4 h-4 text-blue-400" /><p className="text-sm text-gray-400">Total Calls</p></div>
-                    <p className="text-2xl font-bold">{viewCampaign.totalCalls?.toLocaleString() || 0}</p>
-                    <p className="text-xs text-green-400 mt-1">+17% from last week</p>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-2 mb-2"><Users className="w-4 h-4 text-purple-400" /><p className="text-sm text-gray-400">Contacts Reached</p></div>
-                    <p className="text-2xl font-bold">{viewCampaign.contactsReached?.toLocaleString() || 0}</p>
-                    <p className="text-xs text-green-400 mt-1">+7.1% reach rate</p>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-2 mb-2"><TrendingUp className="w-4 h-4 text-green-400" /><p className="text-sm text-gray-400">Conversation Rate</p></div>
-                    <p className="text-2xl font-bold">{viewCampaign.conversationRate || "0%"}</p>
-                    <p className="text-xs text-green-400 mt-1">+2.2% improvement</p>
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Users className="w-5 h-5 text-purple-500" />
+                      <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300">AI Agent</h3>
+                    </div>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">{viewCampaign.aiAgent || "N/A"}</p>
                   </div>
                 </div>
-                <h3 className="text-lg font-semibold mb-3">Campaign Description</h3>
-                <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <p className="text-gray-300">{viewCampaign.description || "No description available."}</p>
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Performance Metrics</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Phone className="w-4 h-4 text-blue-500" />
+                      <p className="text-sm text-gray-600 dark:text-gray-300">Total Calls</p>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{viewCampaign.totalCalls || "0"}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">+17% from last week</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-purple-500" />
+                      <p className="text-sm text-gray-600 dark:text-gray-300">Contacts Reached</p>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{viewCampaign.contactsReached || "0"}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">+7.1% reach rate</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="w-4 h-4 text-green-500" />
+                      <p className="text-sm text-gray-600 dark:text-gray-300">Conversation Rate</p>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{viewCampaign.conversationRate || "0%"}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">+2.2% improvement</p>
+                  </div>
+                </div>
+                <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Campaign Description</h3>
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <p className="text-gray-700 dark:text-gray-300">{viewCampaign.description || "No description available."}</p>
                 </div>
               </div>
             </div>
