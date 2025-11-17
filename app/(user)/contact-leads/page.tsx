@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import { Search, Download, Trash2, Plus, Upload, X, Loader2, FileDown } from "lucide-react";
 import axiosClient from "@/lib/axiosClient";
+import axios from "axios";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 
 const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
+const LABEL_API_BASE_URL = "https://backend.developmentsite.space";
 
 interface Lead {
   id: string;
@@ -25,12 +27,19 @@ interface Lead {
 interface AddContactFormData {
   name: string;
   number: string;
+  label: string;
   consent: boolean;
 }
 
 interface AddContactFormErrors {
   name?: string;
   number?: string;
+  label?: string;
+}
+
+interface Label {
+  id: string;
+  name: string;
 }
 
 export default function ContactLeadsPage() {
@@ -43,19 +52,26 @@ export default function ContactLeadsPage() {
   } | null>(null);
   const [isAddContactModalOpen, setIsAddContactModalOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const [addContactFormData, setAddContactFormData] = useState<AddContactFormData>({
     name: "",
     number: "",
+    label: "",
     consent: false,
   });
   const [addContactFormErrors, setAddContactFormErrors] = useState<AddContactFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [labelError, setLabelError] = useState<string | null>(null);
+  const [loadingLabels, setLoadingLabels] = useState(false);
 
-  // Fetch contacts on component mount
+  // Fetch contacts and labels on component mount
   useEffect(() => {
     fetchContacts();
+    fetchLabels();
   }, []);
 
   // Auto-hide messages after 3 seconds
@@ -80,6 +96,30 @@ export default function ContactLeadsPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLabels = async () => {
+    try {
+      setLoadingLabels(true);
+      const response = await axios.get(`${LABEL_API_BASE_URL}/label/${TENANT_ID}`);
+      // Handle both array of objects and array of strings
+      const labelsData = response.data;
+      if (Array.isArray(labelsData)) {
+        const formattedLabels = labelsData.map((label: any) => {
+          if (typeof label === 'string') {
+            return { id: label, name: label };
+          }
+          return { id: label.id || label.name, name: label.name || label.id };
+        });
+        setLabels(formattedLabels);
+      }
+    } catch (error: any) {
+      console.error("Error fetching labels:", error);
+      console.error("Error details:", error.response?.data);
+      // Don't show error message for labels, just log it
+    } finally {
+      setLoadingLabels(false);
     }
   };
 
@@ -189,6 +229,7 @@ export default function ContactLeadsPage() {
     setAddContactFormData({
       name: "",
       number: "",
+      label: "",
       consent: false,
     });
     setAddContactFormErrors({});
@@ -201,6 +242,7 @@ export default function ContactLeadsPage() {
       setAddContactFormData({
         name: "",
         number: "",
+        label: "",
         consent: false,
       });
       setAddContactFormErrors({});
@@ -236,7 +278,8 @@ export default function ContactLeadsPage() {
     try {
       setSubmitting(true);
 
-      // Only send name and number as per API requirements
+      // Only send fields that the backend Contact model expects
+      // Based on your API sample, this is just name and number
       const contactPayload = {
         name: addContactFormData.name,
         number: addContactFormData.number,
@@ -266,6 +309,53 @@ export default function ContactLeadsPage() {
     setAddContactFormData((prev) => ({ ...prev, [field]: value }));
     if (field !== "consent" && addContactFormErrors[field as keyof AddContactFormErrors]) {
       setAddContactFormErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleOpenLabelModal = () => {
+    setNewLabelName("");
+    setLabelError(null);
+    setIsLabelModalOpen(true);
+  };
+
+  const handleCloseLabelModal = () => {
+    setIsLabelModalOpen(false);
+    setNewLabelName("");
+    setLabelError(null);
+  };
+
+  const handleAddLabel = async () => {
+    const trimmedLabel = newLabelName.trim();
+
+    if (!trimmedLabel) {
+      setLabelError("Label name is required");
+      return;
+    }
+
+    // Check if label already exists locally
+    if (labels.some((label) => label.name.toLowerCase() === trimmedLabel.toLowerCase())) {
+      setLabelError("Label already exists");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await axios.post(`${LABEL_API_BASE_URL}/label/${TENANT_ID}`, {
+        name: trimmedLabel,
+      });
+      
+      setMessage({ text: "Label added successfully!", type: "success" });
+      handleCloseLabelModal();
+      
+      // Refetch labels to get the updated list from backend
+      await fetchLabels();
+    } catch (error: any) {
+      console.error("Error adding label:", error);
+      console.error("Error details:", error.response?.data);
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || "Failed to add label. Please try again.";
+      setLabelError(errorMessage);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -360,6 +450,14 @@ export default function ContactLeadsPage() {
               >
                 <Plus className="w-4 h-4" />
                 Add Contact
+              </button>
+
+              <button
+                onClick={handleOpenLabelModal}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Label
               </button>
 
               <button
@@ -498,7 +596,7 @@ export default function ContactLeadsPage() {
                     className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center  justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                         Add Contact
                       </h3>
@@ -541,7 +639,7 @@ export default function ContactLeadsPage() {
                           Phone Number <span className="text-red-500">*</span>
                         </label>
                         
-			 <PhoneInput
+			              <PhoneInput
                     defaultCountry="ng"
                     value={addContactFormData.number}
                     onChange={(phone) => handleAddContactInputChange("number", phone)}
@@ -561,6 +659,41 @@ export default function ContactLeadsPage() {
                         )}
                       </div>
       
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Select Label
+                        </label>
+                        <select
+                          value={addContactFormData.label}
+                          onChange={(e) => handleAddContactInputChange("label", e.target.value)}
+                          disabled={submitting || labels.length === 0 || loadingLabels}
+                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            addContactFormErrors.label
+                              ? "border-red-500 focus:ring-red-500"
+                              : "border-gray-300 dark:border-gray-600"
+                          }`}
+                        >
+                          <option value="">
+                            {loadingLabels ? "Loading labels..." : labels.length === 0 ? "No labels available" : "Select a label"}
+                          </option>
+                          {labels.map((label) => (
+                            <option key={label.id} value={label.id}>
+                              {label.name}
+                            </option>
+                          ))}
+                        </select>
+                        {labels.length === 0 && !loadingLabels && (
+                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Add a label to enable this dropdown.
+                          </p>
+                        )}
+                        {addContactFormErrors.label && (
+                          <p className="mt-1 text-sm text-red-500">
+                            {addContactFormErrors.label}
+                          </p>
+                        )}
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                           Consent
@@ -612,6 +745,92 @@ export default function ContactLeadsPage() {
                 </div>
               </div>
             )}
+
+      {/* Add Label Modal */}
+      {isLabelModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={handleCloseLabelModal}
+          ></div>
+
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Add Label
+                </h3>
+                <button
+                  onClick={handleCloseLabelModal}
+                  className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Label Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newLabelName}
+                    onChange={(e) => {
+                      setNewLabelName(e.target.value);
+                      if (labelError) {
+                        setLabelError(null);
+                      }
+                    }}
+                    disabled={submitting}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      labelError
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-gray-300 dark:border-gray-600"
+                    }`}
+                    placeholder="Enter label name"
+                  />
+                  {labelError && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {labelError}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleCloseLabelModal}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddLabel}
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Add Label
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Upload Modal */}
       {isBulkUploadModalOpen && (

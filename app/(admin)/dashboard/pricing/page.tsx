@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import DashboardHeader from "@/components/DashboardHeader";
-import { Check, Plus, X, Loader2 } from "lucide-react";
+import { Check, Plus, X, Loader2, Edit } from "lucide-react";
 import axiosClient from "@/lib/axiosClient";
 import toast from "react-hot-toast";
 
@@ -329,12 +329,23 @@ export default function SubscriptionPlansPage() {
               </div>
 
               <div className="px-6 py-4 bg-gray-700/50 border-t border-gray-700 dark:border-gray-800 mt-auto">
-                <p className="text-xs text-gray-400">
-                  Total subscribed tenants:{" "}
-                  <span className="text-white font-semibold">
-                    {plan.totalSubscribers}
-                  </span>
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-400">
+                    Total subscribed tenants:{" "}
+                    <span className="text-white font-semibold">
+                      {plan.totalSubscribers}
+                    </span>
+                  </p>
+                  {(plan.name.toLowerCase() === "business" || plan.name.toLowerCase() === "starter") && (
+                    <button
+                      onClick={() => handleOpenModal(plan)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 bg-blue-600/20 hover:bg-blue-600/30 rounded-lg transition-colors"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      Edit Plan
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

@@ -9,16 +9,17 @@ interface Campaign {
   id: string;
   name: string;
   type: "Inbound" | "Outbound";
-  aiAgent: string;
-  aiAgentId: string;
+  aiAgent?: string; // For display purposes only
+  agentId: string;
   startDate: string;
   endDate: string;
   status: "Active" | "Scheduled" | "Completed" | "Paused";
   description?: string;
-  contactListId?: string;
-  totalCalls?: number;
-  contactsReached?: number;
-  conversionRate?: string;
+  labelId?: string;
+  totalCalls?: string; // Stored as String in Prisma schema
+  contactsReached?: string; // Stored as String in Prisma schema
+  conversationRate?: string; // Using conversationRate as specified by user
+  tenantId?: string;
 }
 
 interface AIAgent {
@@ -26,23 +27,19 @@ interface AIAgent {
   name: string;
 }
 
-interface Contact {
+interface Label {
   id: string;
   name: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://backend.developmentsite.space/";
 const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
-const CONTACT_API_BASE_URL = `http://localhost:8000/contact/${TENANT_ID}/`;
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([
-    { id: "1", name: "Q4 Lead Generation", type: "Outbound", aiAgent: "GPT-4 Sales", aiAgentId: "agent1", startDate: "1/14/2024", endDate: "3/30/2024", status: "Active", description: "This campaign is designed to engage with potential customers.", totalCalls: 1247, contactsReached: 892, conversionRate: "24.3%" },
-    { id: "2", name: "Customer Support", type: "Inbound", aiAgent: "Claude Support", aiAgentId: "agent2", startDate: "1/31/2024", endDate: "12/30/2024", status: "Active", description: "Automated support.", totalCalls: 2156, contactsReached: 1987, conversionRate: "31.5%" },
-  ]);
-
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
   const [aiAgents, setAiAgents] = useState<AIAgent[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -50,18 +47,82 @@ export default function CampaignsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [viewCampaign, setViewCampaign] = useState<Campaign | null>(null);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
-  const [formData, setFormData] = useState<any>({ name: "", aiAgent: "", startDate: "", endDate: "", description: "", contactList: "" });
+  const [formData, setFormData] = useState<any>({ name: "", agent: "", startDate: "", endDate: "", description: "", label: "" });
   const [formErrors, setFormErrors] = useState<any>({});
 
   const itemsPerPage = 5;
 
+  // Fetch campaigns, agents, and labels on component mount
   useEffect(() => {
-    axios.get(`${API_BASE_URL}agents`).then(res => setAiAgents(res.data)).catch(console.error);
+    const loadData = async () => {
+      await Promise.all([fetchAgents(), fetchLabels()]);
+      await fetchCampaigns();
+    };
+    loadData();
   }, []);
 
-  useEffect(() => {
-    axios.get(CONTACT_API_BASE_URL).then(res => setContacts(res.data)).catch(console.error);
-  }, []);
+  const fetchCampaigns = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE_URL}campaign/${TENANT_ID}`);
+      // Map backend response to match our interface
+      const formattedCampaigns = response.data.map((campaign: any) => {
+        const agent = aiAgents.find(a => a.id === campaign.agentId);
+        return {
+          id: campaign.id || campaign._id,
+          name: campaign.name,
+          type: campaign.type,
+          agentId: campaign.agentId,
+          aiAgent: agent?.name || "",
+          startDate: campaign.startDate,
+          endDate: campaign.endDate,
+          status: campaign.status,
+          description: campaign.description,
+          labelId: campaign.labelId,
+          totalCalls: campaign.totalCalls || 0,
+          contactsReached: campaign.contactsReached || 0,
+          conversationRate: campaign.conversationRate || "0%",
+          tenantId: campaign.tenantId,
+        };
+      });
+      setCampaigns(formattedCampaigns);
+    } catch (error: any) {
+      console.error("Error fetching campaigns:", error);
+      toast.error(error.response?.data?.error || "Failed to load campaigns");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAgents = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}agents`);
+      setAiAgents(response.data);
+    } catch (error: any) {
+      console.error("Error fetching agents:", error);
+      toast.error("Failed to load AI agents");
+    }
+  };
+
+  const fetchLabels = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}label/${TENANT_ID}`);
+      // Handle both array of objects and array of strings
+      const labelsData = response.data;
+      if (Array.isArray(labelsData)) {
+        const formattedLabels = labelsData.map((label: any) => {
+          if (typeof label === 'string') {
+            return { id: label, name: label };
+          }
+          return { id: label.id || label.name, name: label.name || label.id };
+        });
+        setLabels(formattedLabels);
+      }
+    } catch (error: any) {
+      console.error("Error fetching labels:", error);
+      // Don't show error toast for labels, just log it
+    }
+  };
 
   const filteredCampaigns = campaigns.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const totalPages = Math.ceil(filteredCampaigns.length / itemsPerPage);
@@ -79,7 +140,7 @@ export default function CampaignsPage() {
       setIsCreateModalOpen(false);
       setCampaignType(null);
       setEditingCampaign(null);
-      setFormData({ name: "", aiAgent: "", startDate: "", endDate: "", description: "", contactList: "" });
+      setFormData({ name: "", agent: "", startDate: "", endDate: "", description: "", label: "" });
       setFormErrors({});
     }
   };
@@ -89,11 +150,11 @@ export default function CampaignsPage() {
     setCampaignType(campaign.type.toLowerCase() as "inbound" | "outbound");
     setFormData({
       name: campaign.name,
-      aiAgent: campaign.aiAgentId,
+      agent: campaign.agentId,
       startDate: campaign.startDate ? new Date(campaign.startDate).toISOString().split('T')[0] : "",
       endDate: campaign.endDate ? new Date(campaign.endDate).toISOString().split('T')[0] : "",
       description: campaign.description || "",
-      contactList: campaign.contactListId || "",
+      label: campaign.labelId || "",
     });
     setIsCreateModalOpen(true);
   };
@@ -101,11 +162,11 @@ export default function CampaignsPage() {
   const validateForm = () => {
     const errors: any = {};
     if (!formData.name.trim()) errors.name = "Required";
-    if (!formData.aiAgent) errors.aiAgent = "Required";
+    if (!formData.agent) errors.agent = "Required";
     if (!formData.startDate) errors.startDate = "Required";
     if (!formData.endDate) errors.endDate = "Required";
     if (!formData.description.trim()) errors.description = "Required";
-    if (campaignType === "outbound" && !formData.contactList) errors.contactList = "Required";
+    if (campaignType === "outbound" && !formData.label) errors.label = "Required";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -114,39 +175,46 @@ export default function CampaignsPage() {
     if (!validateForm()) return;
     setSubmitting(true);
     try {
+      // Prepare payload according to backend expectations
+      const campaignPayload: any = {
+        name: formData.name.trim(),
+        type: campaignType === "inbound" ? "Inbound" : "Outbound",
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        description: formData.description.trim(),
+        status: editingCampaign ? editingCampaign.status : "Scheduled",
+        // Prisma schema stores totalCalls and contactsReached as String, so send strings
+        totalCalls: editingCampaign
+          ? String(editingCampaign.totalCalls ?? "0")
+          : "0",
+        contactsReached: editingCampaign
+          ? String(editingCampaign.contactsReached ?? "0")
+          : "0",
+        conversationRate: editingCampaign ? editingCampaign.conversationRate || "0%" : "0%",
+        tenantId: TENANT_ID,
+        agentId: formData.agent,
+      };
+
+      // Backend requires labelId for all campaigns; always include when present
+      if (formData.label) {
+        campaignPayload.labelId = formData.label;
+      }
+
       if (editingCampaign) {
-        setCampaigns(prev => prev.map(c => c.id === editingCampaign.id ? {
-          ...editingCampaign,
-          name: formData.name,
-          aiAgent: aiAgents.find(a => a.id === formData.aiAgent)?.name || "",
-          aiAgentId: formData.aiAgent,
-          startDate: new Date(formData.startDate).toLocaleDateString(),
-          endDate: new Date(formData.endDate).toLocaleDateString(),
-          description: formData.description,
-          contactListId: formData.contactList,
-        } : c));
+        // Update campaign
+        const response = await axios.put(`${API_BASE_URL}campaign/${TENANT_ID}/${editingCampaign.id}`, campaignPayload);
         toast.success("Campaign updated!");
+        await fetchCampaigns();
       } else {
-        setCampaigns(prev => [{
-          id: Date.now().toString(),
-          name: formData.name,
-          type: campaignType === "inbound" ? "Inbound" : "Outbound",
-          aiAgent: aiAgents.find(a => a.id === formData.aiAgent)?.name || "",
-          aiAgentId: formData.aiAgent,
-          startDate: new Date(formData.startDate).toLocaleDateString(),
-          endDate: new Date(formData.endDate).toLocaleDateString(),
-          status: "Scheduled",
-          description: formData.description,
-          contactListId: formData.contactList,
-          totalCalls: 0,
-          contactsReached: 0,
-          conversionRate: "0%",
-        }, ...prev]);
+        // Create new campaign
+        const response = await axios.post(`${API_BASE_URL}campaign/${TENANT_ID}`, campaignPayload);
         toast.success("Campaign created!");
+        await fetchCampaigns();
       }
       handleCloseModal();
-    } catch (error) {
-      toast.error("Failed");
+    } catch (error: any) {
+      console.error("Error saving campaign:", error);
+      toast.error(error.response?.data?.error || error.response?.data?.message || "Failed to save campaign");
     } finally {
       setSubmitting(false);
     }
@@ -173,44 +241,66 @@ export default function CampaignsPage() {
             </button>
           </div>
 
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Campaign Name</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Type</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">AI Agent</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Start Date</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">End Date</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Status</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentCampaigns.map((campaign) => (
-                <tr key={campaign.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">{campaign.name}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                    <span className="inline-flex items-center gap-1">
-                      {campaign.type === "Inbound" ? <PhoneIncoming className="w-4 h-4 text-blue-600" /> : <PhoneOutgoing className="w-4 h-4 text-purple-600" />}
-                      {campaign.type}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{campaign.aiAgent}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{campaign.startDate}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{campaign.endDate}</td>
-                  <td className="py-4 px-6">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>● {campaign.status}</span>
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setViewCampaign(campaign)} className="p-1.5 text-gray-600 hover:text-blue-600"><Eye className="w-4 h-4" /></button>
-                      <button onClick={() => handleEditCampaign(campaign)} className="p-1.5 text-gray-600 hover:text-blue-600"><Edit className="w-4 h-4" /></button>
-                    </div>
-                  </td>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">Loading campaigns...</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Campaign Name</th>
+                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Type</th>
+                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">AI Agent</th>
+                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Start Date</th>
+                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">End Date</th>
+                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Status</th>
+                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {currentCampaigns.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-16 text-center">
+                      <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
+                        {searchTerm ? "No campaigns found matching your search." : "No campaigns yet."}
+                      </p>
+                      {!searchTerm && (
+                        <p className="text-gray-400 dark:text-gray-500 text-sm">
+                          Click "Create Campaign" to create your first campaign.
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  currentCampaigns.map((campaign) => (
+                    <tr key={campaign.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">{campaign.name}</td>
+                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
+                        <span className="inline-flex items-center gap-1">
+                          {campaign.type === "Inbound" ? <PhoneIncoming className="w-4 h-4 text-blue-600" /> : <PhoneOutgoing className="w-4 h-4 text-purple-600" />}
+                          {campaign.type}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{campaign.aiAgent || "N/A"}</td>
+                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{campaign.startDate}</td>
+                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{campaign.endDate}</td>
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>● {campaign.status}</span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setViewCampaign(campaign)} className="p-1.5 text-gray-600 hover:text-blue-600"><Eye className="w-4 h-4" /></button>
+                          <button onClick={() => handleEditCampaign(campaign)} className="p-1.5 text-gray-600 hover:text-blue-600"><Edit className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
 
           <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50">← Previous</button>
@@ -259,8 +349,8 @@ export default function CampaignsPage() {
                     <p className="text-xs text-green-400 mt-1">+7.1% reach rate</p>
                   </div>
                   <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-2 mb-2"><TrendingUp className="w-4 h-4 text-green-400" /><p className="text-sm text-gray-400">Conversion Rate</p></div>
-                    <p className="text-2xl font-bold">{viewCampaign.conversionRate || "0%"}</p>
+                    <div className="flex items-center gap-2 mb-2"><TrendingUp className="w-4 h-4 text-green-400" /><p className="text-sm text-gray-400">Conversation Rate</p></div>
+                    <p className="text-2xl font-bold">{viewCampaign.conversationRate || "0%"}</p>
                     <p className="text-xs text-green-400 mt-1">+2.2% improvement</p>
                   </div>
                 </div>
@@ -321,11 +411,11 @@ export default function CampaignsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{campaignType === "inbound" ? "AI Agent" : "AI Model"} <span className="text-red-500">*</span></label>
-                      <select value={formData.aiAgent} onChange={(e) => setFormData({ ...formData, aiAgent: e.target.value })} disabled={submitting} className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.aiAgent ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`}>
+                      <select value={formData.agent} onChange={(e) => setFormData({ ...formData, agent: e.target.value })} disabled={submitting} className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.agent ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`}>
                         <option value="">Select AI agent</option>
                         {aiAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
                       </select>
-                      {formErrors.aiAgent && <p className="mt-1 text-sm text-red-500">{formErrors.aiAgent}</p>}
+                      {formErrors.agent && <p className="mt-1 text-sm text-red-500">{formErrors.agent}</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -341,12 +431,12 @@ export default function CampaignsPage() {
                     </div>
                     {campaignType === "outbound" && (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact List <span className="text-red-500">*</span></label>
-                        <select value={formData.contactList} onChange={(e) => setFormData({ ...formData, contactList: e.target.value })} disabled={submitting} className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.contactList ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`}>
-                          <option value="">Select contact list</option>
-                          {contacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Label <span className="text-red-500">*</span></label>
+                        <select value={formData.label} onChange={(e) => setFormData({ ...formData, label: e.target.value })} disabled={submitting} className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.label ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`}>
+                          <option value="">Select label</option>
+                          {labels.map(label => <option key={label.id} value={label.id}>{label.name}</option>)}
                         </select>
-                        {formErrors.contactList && <p className="mt-1 text-sm text-red-500">{formErrors.contactList}</p>}
+                        {formErrors.label && <p className="mt-1 text-sm text-red-500">{formErrors.label}</p>}
                       </div>
                     )}
                     <div>
