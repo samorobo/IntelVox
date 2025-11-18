@@ -283,6 +283,7 @@ export default function ContactLeadsPage() {
       const contactPayload = {
         name: addContactFormData.name,
         number: addContactFormData.number,
+        labelId: addContactFormData.label
       };
 
       console.log("Creating contact with payload:", contactPayload);
