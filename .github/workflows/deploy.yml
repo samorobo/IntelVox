@@ -1,0 +1,146 @@
+name: Deploy Frontend (Direct Upload + Cleanup + Health Check)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Test SSH connection
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "🔐 SSH connection test successful on $(hostname)"
+            uptime
+
+      - name: Upload source code to VPS (attempt 1)
+        id: upload1
+        continue-on-error: true
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "."
+          target: "/var/www/intelvox_frontend_temp"
+          overwrite: true
+          debug: true
+          timeout: 180s
+          command_timeout: 180s
+
+      - name: Retry upload if failed
+        if: steps.upload1.outcome == 'failure'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "."
+          target: "/var/www/intelvox_frontend_temp"
+          overwrite: true
+          timeout: 180s
+          command_timeout: 180s
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "🚀 Starting frontend deployment..."
+            mkdir -p /var/www
+            
+            # Check if upload was successful
+            if [ ! -d "/var/www/intelvox_frontend_temp" ]; then
+              echo "❌ Upload failed - temp directory not found"
+              exit 1
+            fi
+            
+            if [ -d "/var/www/intelvox_frontend" ]; then
+              echo "🧹 Backing up old version..."
+              rm -rf /var/www/intelvox_frontend_old
+              mv /var/www/intelvox_frontend /var/www/intelvox_frontend_old
+            fi
+            
+            echo "📦 Moving new version..."
+            mv /var/www/intelvox_frontend_temp /var/www/intelvox_frontend
+            cd /var/www/intelvox_frontend
+            
+            echo "🔹 Installing dependencies..."
+            npm ci
+            
+            echo "🔹 Installing PM2 globally..."
+            npm install -g pm2 || true
+            
+            echo "🔹 Stopping processes on port 3000..."
+            sudo lsof -ti:3000 | xargs -r sudo kill -9 2>/dev/null || true
+            
+            echo "🔹 Cleaning PM2 processes..."
+            pm2 delete all 2>/dev/null || true
+            pm2 kill 2>/dev/null || true
+            sleep 3
+            
+            echo "🔹 Starting application..."
+            pm2 start npm --name "intelvox_frontend" --instances 1 -- start
+            pm2 save
+            
+            sleep 8
+            
+            echo "🔍 Checking process status..."
+            pm2 status
+            
+            RETRIES=0
+            MAX_RETRIES=15
+            
+            while [ $RETRIES -lt $MAX_RETRIES ]; do
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
+              if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "404" ]; then
+                echo "✅ Health check passed! (HTTP $HTTP_CODE)"
+                rm -rf /var/www/intelvox_frontend_old 2>/dev/null || true
+                echo "🎉 Deployment successful!"
+                exit 0
+              fi
+              echo "⏳ Waiting... (attempt $((RETRIES + 1))/$MAX_RETRIES, HTTP $HTTP_CODE)"
+              RETRIES=$((RETRIES + 1))
+              sleep 2
+            done
+            
+            echo "❌ Health check failed after $MAX_RETRIES attempts"
+            echo "📋 Application logs:"
+            pm2 logs intelvox_frontend --lines 30 --nostream || true
+            
+            if [ -d "/var/www/intelvox_frontend_old" ]; then
+              echo "⏮️  Rolling back to previous version..."
+              pm2 delete intelvox_frontend 2>/dev/null || true
+              rm -rf /var/www/intelvox_frontend
+              mv /var/www/intelvox_frontend_old /var/www/intelvox_frontend
+              cd /var/www/intelvox_frontend
+              pm2 start npm --name "intelvox_frontend" -- start
+              pm2 save
+              echo "✅ Rollback complete"
+            fi
+            exit 1

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Eye, MoreVertical } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import {
   Search,
@@ -15,6 +16,21 @@ import {
   ChevronRight,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import AgentDetailsModal from "@/components/AgentDetailsModal";
+
+interface TwilioConfig {
+  phoneNumber: string;
+  accountSid: string;
+  isActive: boolean;
+}
+
+interface LLMConfig {
+  provider: string;
+  modelname: string;
+  maxTokens: number | null;
+  temperature: number | null;
+  isActive: boolean;
+}
 
 interface AIAgent {
   id: string;
@@ -25,17 +41,24 @@ interface AIAgent {
   createdOn: string;
   status: "active" | "inactive" | "suspended";
   type: string;
-  llmModel: string;
   voice: string;
   knowledgeBase: string;
+  tenantId: string;
+  tenant: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  twilioConfig: TwilioConfig | null;
+  llmConfig: LLMConfig | null;
 }
 
 interface FormData {
   name: string;
   persona: string;
   type: string;
-  //twillo_number: number;
-  llmModel: string;
+  twilioConfigId: string;
+  llmConfigId: string;
   voice: string;
   knowledgeBase: string;
 }
@@ -44,26 +67,19 @@ interface FormErrors {
   name?: string;
   persona?: string;
   type?: string;
-  llmModel?: string;
+  twilioConfigId?: string;
+  llmConfigId?: string;
   voice?: string;
   knowledgeBase?: string;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-// Available options for LLM models and voices
-const LLM_MODELS = [
-  "gpt-4",
-  "gpt-4-turbo",
-  "gpt-3.5-turbo",
-  "claude-3-opus",
-  "claude-3-sonnet",
-  "claude-3-haiku",
-];
-
+const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
 const VOICE_OPTIONS = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
 
 export default function AIAgentPage() {
+  const [selectedAgent, setSelectedAgent] = useState<AIAgent | null>(null);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [filteredAgents, setFilteredAgents] = useState<AIAgent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +94,8 @@ export default function AIAgentPage() {
     name: "",
     persona: "",
     type: "inbound",
-    llmModel: "",
+    twilioConfigId: "",
+    llmConfigId: "",
     voice: "",
     knowledgeBase: "",
   });
@@ -86,22 +103,41 @@ export default function AIAgentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
+  const [twilioConfigs, setTwilioConfigs] = useState<any[]>([]);
+  const [llmConfigs, setLlmConfigs] = useState<any[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const handleViewDetails = (agent: AIAgent) => {
+    setSelectedAgent(agent);
+    setDetailsModalOpen(true);
+  };
   useEffect(() => {
-    const loadAgents = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE_URL}agents`);
-        setAgents(response.data);
-        setFilteredAgents(response.data);
+        setLoadingConfigs(true);
+
+        const [agentsResponse, twilioResponse, llmResponse] = await Promise.all(
+          [
+            axios.get(`${API_BASE_URL}agents/${TENANT_ID}`),
+            axios.get(`${API_BASE_URL}twilio/${TENANT_ID}`),
+            axios.get(`${API_BASE_URL}llm/${TENANT_ID}`),
+          ]
+        );
+
+        setAgents(agentsResponse.data);
+        setFilteredAgents(agentsResponse.data);
+        setTwilioConfigs(twilioResponse.data);
+        setLlmConfigs(llmResponse.data);
       } catch (error) {
-        console.error("Error loading agents:", error);
-        toast.error("Failed to load agents");
+        console.error("Error loading data:", error);
+        toast.error("Failed to load data");
       } finally {
         setLoading(false);
+        setLoadingConfigs(false);
       }
     };
 
-    loadAgents();
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -154,11 +190,24 @@ export default function AIAgentPage() {
     setEditingAgent(agent);
     setFormStep("basic");
     if (agent) {
+      const twilioConfigId =
+        twilioConfigs.find(
+          (config) => config.phoneNumber === agent.twilioConfig?.phoneNumber
+        )?.id || "";
+
+      const llmConfigId =
+        llmConfigs.find(
+          (config) =>
+            config.modelname === agent.llmConfig?.modelname &&
+            config.provider === agent.llmConfig?.provider
+        )?.id || "";
+
       setFormData({
         name: agent.name,
         persona: agent.persona,
         type: agent.type,
-        llmModel: agent.llmModel,
+        twilioConfigId,
+        llmConfigId,
         voice: agent.voice,
         knowledgeBase: agent.knowledgeBase,
       });
@@ -167,7 +216,8 @@ export default function AIAgentPage() {
         name: "",
         persona: "",
         type: "inbound",
-        llmModel: "",
+        twilioConfigId: "",
+        llmConfigId: "",
         voice: "",
         knowledgeBase: "",
       });
@@ -185,7 +235,8 @@ export default function AIAgentPage() {
         name: "",
         persona: "",
         type: "inbound",
-        llmModel: "",
+        twilioConfigId: "",
+        llmConfigId: "",
         voice: "",
         knowledgeBase: "",
       });
@@ -200,7 +251,9 @@ export default function AIAgentPage() {
     if (!formData.persona.trim())
       errors.persona = "Persona description is required";
     if (!formData.type) errors.type = "Agent type is required";
-    if (!formData.llmModel) errors.llmModel = "LLM Model is required";
+    if (!formData.twilioConfigId)
+      errors.twilioConfigId = "Twilio number is required";
+    if (!formData.llmConfigId) errors.llmConfigId = "LLM Model is required";
     if (!formData.voice) errors.voice = "Voice is required";
 
     setFormErrors(errors);
@@ -234,10 +287,17 @@ export default function AIAgentPage() {
     try {
       setSubmitting(true);
 
+      const agentPayload = {
+        ...formData,
+        tenantId: TENANT_ID,
+        conversations: 0,
+        retention: 0,
+      };
+
       if (editingAgent) {
         const response = await axios.put(
           `${API_BASE_URL}agent/${editingAgent.id}`,
-          formData
+          agentPayload
         );
         setAgents((prev) =>
           prev.map((agent) =>
@@ -246,15 +306,12 @@ export default function AIAgentPage() {
         );
         toast.success("Agent updated successfully!");
       } else {
-        const agentData = {
-          ...formData,
-          conversations: 0,
-          retention: 0,
-          tenantId: "cmhqjnjb50004vkiolo5br0qd",
-        };
-
-        const response = await axios.post(`${API_BASE_URL}agent`, agentData);
-        setAgents((prev) => [response.data, ...prev]);
+        const response = await axios.post(`${API_BASE_URL}agent`, agentPayload);
+        // Refresh agents to get the updated data with configs
+        const agentsResponse = await axios.get(
+          `${API_BASE_URL}agents/${TENANT_ID}`
+        );
+        setAgents(agentsResponse.data);
         toast.success("Agent created successfully!");
       }
 
@@ -301,6 +358,17 @@ export default function AIAgentPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const getLlmDisplayText = (agent: AIAgent) => {
+    if (agent.llmConfig) {
+      return `${agent.llmConfig.modelname} (${agent.llmConfig.provider})`;
+    }
+    return "Not configured";
+  };
+
+  const getTwilioDisplayText = (agent: AIAgent) => {
+    return agent.twilioConfig?.phoneNumber || "Not configured";
   };
 
   const renderFormStep = () => {
@@ -376,60 +444,75 @@ export default function AIAgentPage() {
             </p>
           </div>
 
-
-{/* // Agent 2 */}
-           <div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Twillio Number <span className="text-red-500">*</span>
+              Twilio Number <span className="text-red-500">*</span>
             </label>
             <select
-              value={formData.type}
-              onChange={(e) => handleInputChange("type", e.target.value)}
-              disabled={submitting}
+              value={formData.twilioConfigId}
+              onChange={(e) =>
+                handleInputChange("twilioConfigId", e.target.value)
+              }
+              disabled={submitting || loadingConfigs}
               className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                formErrors.type
+                formErrors.twilioConfigId
                   ? "border-red-500 focus:ring-red-500"
                   : "border-gray-300 dark:border-gray-600"
               }`}
             >
-              <option value="inbound">+234-9089-67</option>
-              <option value="outbound">+91-897-8645</option>
+              <option value="">Select Twilio Number</option>
+              {twilioConfigs
+                .filter((config) => config.isActive)
+                .map((config) => (
+                  <option key={config.id} value={config.id}>
+                    {config.phoneNumber}
+                  </option>
+                ))}
             </select>
-            {formErrors.type && (
-              <p className="mt-1 text-sm text-red-500">{formErrors.type}</p>
+            {formErrors.twilioConfigId && (
+              <p className="mt-1 text-sm text-red-500">
+                {formErrors.twilioConfigId}
+              </p>
             )}
-            <p className="mt-1 text-xs text-gray-500">
-              {formData.type === "inbound"
-                ? "Handles incoming customer queries and support requests"
-                : "Proactively reaches out to potential customers and leads"}
-            </p>
+            {loadingConfigs && (
+              <p className="mt-1 text-xs text-gray-500">
+                Loading Twilio numbers...
+              </p>
+            )}
           </div>
-
-
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               LLM Model <span className="text-red-500">*</span>
             </label>
             <select
-              value={formData.llmModel}
-              onChange={(e) => handleInputChange("llmModel", e.target.value)}
-              disabled={submitting}
+              value={formData.llmConfigId}
+              onChange={(e) => handleInputChange("llmConfigId", e.target.value)}
+              disabled={submitting || loadingConfigs}
               className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                formErrors.llmModel
+                formErrors.llmConfigId
                   ? "border-red-500 focus:ring-red-500"
                   : "border-gray-300 dark:border-gray-600"
               }`}
             >
               <option value="">Select LLM Model</option>
-              {LLM_MODELS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
+              {llmConfigs
+                .filter((config) => config.isActive)
+                .map((config) => (
+                  <option key={config.id} value={config.id}>
+                    {config.modelname} ({config.provider})
+                  </option>
+                ))}
             </select>
-            {formErrors.llmModel && (
-              <p className="mt-1 text-sm text-red-500">{formErrors.llmModel}</p>
+            {formErrors.llmConfigId && (
+              <p className="mt-1 text-sm text-red-500">
+                {formErrors.llmConfigId}
+              </p>
+            )}
+            {loadingConfigs && (
+              <p className="mt-1 text-xs text-gray-500">
+                Loading LLM models...
+              </p>
             )}
           </div>
 
@@ -584,37 +667,25 @@ export default function AIAgentPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[800px]">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Agent Name
                     </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Persona
-                    </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">
                       Type
                     </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">
                       LLM Model
                     </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Voice
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hidden xl:table-cell">
+                      Conversations / Retentions
                     </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Conversations
-                    </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Retention
-                    </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Created On
-                    </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Status
                     </th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
                       Actions
                     </th>
                   </tr>
@@ -623,15 +694,29 @@ export default function AIAgentPage() {
                   {filteredAgents.map((agent) => (
                     <tr
                       key={agent.id}
-                      className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
-                        {agent.name}
+                      <td className="py-3 px-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            {agent.name}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 md:hidden truncate max-w-[120px]">
+                            {agent.persona}
+                          </div>
+                          <div className="flex items-center gap-1 mt-1 md:hidden">
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${getTypeBadgeColor(
+                                agent.type
+                              )}`}
+                            >
+                              {agent.type.charAt(0).toUpperCase() +
+                                agent.type.slice(1)}
+                            </span>
+                          </div>
+                        </div>
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 max-w-xs truncate">
-                        {agent.persona}
-                      </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4 hidden md:table-cell">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeBadgeColor(
                             agent.type
@@ -641,51 +726,57 @@ export default function AIAgentPage() {
                             agent.type.slice(1)}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {agent.llmModel}
+                      <td className="py-3 px-4 hidden lg:table-cell">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {getLlmDisplayText(agent)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                          {agent.voice}
+                        </div>
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 capitalize">
-                        {agent.voice}
+                      <td className="py-3 px-4 hidden xl:table-cell">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {agent.conversations.toLocaleString()} /{" "}
+                          <span className={getRetentionColor(agent.retention)}>
+                            {agent.retention}%
+                          </span>
+                        </div>
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {agent.conversations.toLocaleString()}
-                      </td>
-                      <td className="py-4 px-6 text-sm font-medium">
-                        <span className={getRetentionColor(agent.retention)}>
-                          {agent.retention}%
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {formatDate(agent.createdOn)}
-                      </td>
-                      <td className="py-4 px-6">
+                      <td className="py-3 px-4">
                         <button
                           onClick={() => toggleStatus(agent.id)}
                           disabled={statusUpdating === agent.id}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                             agent.status === "active"
                               ? "bg-green-500"
                               : "bg-gray-300 dark:bg-gray-600"
                           }`}
                         >
                           {statusUpdating === agent.id ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-white absolute left-1.5" />
+                            <Loader2 className="w-2.5 h-2.5 animate-spin text-white absolute left-1" />
                           ) : (
                             <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
                                 agent.status === "active"
-                                  ? "translate-x-6"
+                                  ? "translate-x-5"
                                   : "translate-x-1"
                               }`}
                             />
                           )}
                         </button>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleViewDetails(agent)}
+                            className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            title="View details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleOpenModal(agent)}
-                            className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            className="p-1 text-gray-400 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors"
                             title="Edit agent"
                           >
                             <Edit className="w-4 h-4" />
@@ -703,13 +794,6 @@ export default function AIAgentPage() {
                   ))}
                 </tbody>
               </table>
-              {filteredAgents.length === 0 && (
-                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                  {agents.length === 0
-                    ? "No AI agents found. Create your first agent to get started."
-                    : "No agents found matching your search."}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -804,6 +888,13 @@ export default function AIAgentPage() {
           </div>
         </div>
       )}
+
+      <AgentDetailsModal
+        agent={selectedAgent}
+        isOpen={detailsModalOpen}
+        onClose={() => setDetailsModalOpen(false)}
+      />
     </>
   );
+  
 }
