@@ -34,8 +34,7 @@ interface Notification {
   timestamp: number;
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
 
 export default function UserSettingsPage() {
@@ -110,7 +109,7 @@ export default function UserSettingsPage() {
   const fetchLLMConfigs = async () => {
     try {
       setLlmLoading(true);
-      const response = await axios.get(`${API_BASE_URL}llm/${TENANT_ID}`);
+      const response = await axios.get(`${API_BASE_URL}/llm/${TENANT_ID}`);
       setLlmConfigs(response.data);
     } catch (error) {
       console.error("Error fetching LLM configs:", error);
@@ -124,7 +123,7 @@ export default function UserSettingsPage() {
   const fetchTwilioConfigs = async () => {
     try {
       setTwilioLoading(true);
-      const response = await axios.get(`${API_BASE_URL}twilio/${TENANT_ID}`);
+      const response = await axios.get(`${API_BASE_URL}/twilio/${TENANT_ID}`);
       setTwilioConfigs(response.data);
     } catch (error) {
       console.error("Error fetching Twilio configs:", error);
@@ -266,7 +265,7 @@ export default function UserSettingsPage() {
       setSavingLLM(true);
       if (editingLLM) {
         const response = await axios.put(
-          `${API_BASE_URL}llm/${TENANT_ID}/${editingLLM.id}`,
+          `${API_BASE_URL}/llm/${TENANT_ID}/${editingLLM.id}`,
           llmForm
         );
         setLlmConfigs((prev) =>
@@ -324,7 +323,7 @@ export default function UserSettingsPage() {
     }
 
     try {
-      await axios.delete(`${API_BASE_URL}twilio/${TENANT_ID}/${id}`);
+      await axios.delete(`${API_BASE_URL}/twilio/${TENANT_ID}/${id}`);
       setTwilioConfigs((prev) => prev.filter((config) => config.id !== id));
       addNotification("Twilio configuration deleted successfully", "success");
     } catch (error) {
@@ -347,7 +346,7 @@ export default function UserSettingsPage() {
       setSavingTwilio(true);
       if (editingTwilio) {
         const response = await axios.put(
-          `${API_BASE_URL}twilio/${TENANT_ID}/${editingTwilio.id}`,
+          `${API_BASE_URL}/twilio/${TENANT_ID}/${editingTwilio.id}`,
           twilioForm
         );
         setTwilioConfigs((prev) =>
@@ -358,7 +357,7 @@ export default function UserSettingsPage() {
         addNotification("Twilio configuration updated successfully", "success");
       } else {
         const response = await axios.post(
-          `${API_BASE_URL}twilio/${TENANT_ID}`,
+          `${API_BASE_URL}/twilio/${TENANT_ID}`,
           twilioForm
         );
         setTwilioConfigs((prev) => [...prev, response.data]);
