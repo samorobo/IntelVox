@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, KeyboardEvent, ChangeEvent } from "react";
+import React, { useState, KeyboardEvent, ChangeEvent } from "react";
 import { Layers, ArrowLeft, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -12,14 +12,16 @@ export default function UserSignupFlow() {
   const [email, setEmail] = useState<string>("");
   const [otp, setOtp] = useState<string[]>(["", "", "", ""]);
   const [profile, setProfile] = useState({
-    firstName: "",
-    lastName: "",
+    name: "",
     phone: "",
   });
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
     "monthly"
   );
   const [selectedPlan, setSelectedPlan] = useState<string>("starter");
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [hasAgreedPrivacy, setHasAgreedPrivacy] = useState(false);
+  const [hasScrolledPrivacy, setHasScrolledPrivacy] = useState(false);
 
   const plans = [
     {
@@ -126,7 +128,7 @@ export default function UserSignupFlow() {
     }
 
     const currentOtp = [...newOtp].join("");
-    if (currentOtp.length === 4 && currentOtp === "2468") {
+    if (currentOtp.length === 4 && currentOtp === "1234") {
       handleOtpSubmit();
     }
   };
@@ -146,14 +148,14 @@ export default function UserSignupFlow() {
   const handleOtpSubmit = (): void => {
     const otpValue = otp.join("");
     if (otpValue.length === 4) {
-      if (otpValue === "2468") {
+      if (otpValue === "1234") {
         setStep("profile");
       }
     }
   };
 
   const handleProfileSubmit = (): void => {
-    if (profile.firstName && profile.lastName && profile.phone) {
+    if (profile.name && profile.phone) {
       setStep("subscription");
     }
   };
@@ -164,6 +166,15 @@ export default function UserSignupFlow() {
 
   const handleSubscriptionSubmit = (): void => {
     router.push("/dashboard");
+  };
+
+  const handlePrivacyScroll = (
+    e: React.UIEvent<HTMLDivElement, UIEvent>
+  ): void => {
+    const target = e.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 10) {
+      setHasScrolledPrivacy(true);
+    }
   };
 
   const handleBack = (): void => {
@@ -331,7 +342,7 @@ export default function UserSignupFlow() {
               <span className="text-white">{email}</span>
               <br />
               <span className="text-blue-400 text-sm mt-2 block">
-                Use static OTP: <strong>2468</strong>
+                Use static OTP: <strong>1234</strong>
               </span>
             </p>
 
@@ -384,7 +395,7 @@ export default function UserSignupFlow() {
         {step === "profile" && (
           <div className="border border-blue-500 rounded-lg p-8 bg-black max-w-md mx-auto">
             <div className="flex justify-center mb-8">
-              <div className="w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center">
                 <Layers className="w-7 h-7 text-white" />
               </div>
             </div>
@@ -393,57 +404,38 @@ export default function UserSignupFlow() {
               Complete your profile
             </h1>
             <p className="text-gray-400 text-center mb-8">
-              Tell us a bit more about yourself
+              Add your basic details to personalize your IntelVox.ai account.
             </p>
 
             <div className="space-y-4 mb-6">
               <div>
                 <label
-                  htmlFor="firstName"
+                  htmlFor="name"
                   className="block text-white text-sm font-medium mb-2"
                 >
-                  First Name <span className="text-red-500">*</span>
+                  Name <span className="text-red-500">*</span>
                 </label>
                 <input
-                  id="firstName"
+                  id="name"
                   type="text"
-                  value={profile.firstName}
+                  value={profile.name}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleProfileChange("firstName", e.target.value)
+                    handleProfileChange("name", e.target.value)
                   }
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                  placeholder="John"
+                  placeholder="Enter your name"
                 />
               </div>
 
               <div>
                 <label
-                  htmlFor="lastName"
-                  className="block text-white text-sm font-medium mb-2"
-                >
-                  Last Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="lastName"
-                  type="text"
-                  value={profile.lastName}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleProfileChange("lastName", e.target.value)
-                  }
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                  placeholder="Doe"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="email"
+                  htmlFor="profile-email"
                   className="block text-white text-sm font-medium mb-2"
                 >
                   Email
                 </label>
                 <input
-                  id="email"
+                  id="profile-email"
                   type="email"
                   value={email}
                   disabled
@@ -456,7 +448,7 @@ export default function UserSignupFlow() {
                   htmlFor="phone"
                   className="block text-white text-sm font-medium mb-2"
                 >
-                  Phone Number <span className="text-red-500">*</span>
+                  Phone number <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="phone"
@@ -466,20 +458,44 @@ export default function UserSignupFlow() {
                     handleProfileChange("phone", e.target.value)
                   }
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="Enter your phone number"
                 />
               </div>
             </div>
 
             <button
               onClick={handleProfileSubmit}
-              disabled={
-                !profile.firstName || !profile.lastName || !profile.phone
-              }
+              disabled={!profile.name || !profile.phone || !hasAgreedPrivacy}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200"
             >
-              Continue to Subscription
+              Proceed
             </button>
+
+            <div className="mt-4 flex items-center justify-center text-xs text-gray-400">
+              <span
+                className={`mr-2 inline-flex items-center justify-center w-4 h-4 rounded border ${
+                  hasAgreedPrivacy
+                    ? "border-blue-500 bg-blue-600"
+                    : "border-gray-600 bg-transparent"
+                }`}
+              >
+                {hasAgreedPrivacy && <Check className="w-3 h-3 text-white" />}
+              </span>
+              <span>
+                By continuing, you must review and agree to our{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasScrolledPrivacy(false);
+                    setIsPrivacyModalOpen(true);
+                  }}
+                  className="text-blue-500 hover:text-blue-400 underline-offset-2 hover:underline ml-1"
+                >
+                  Privacy policy
+                </button>
+                .
+              </span>
+            </div>
 
             <div className="text-center mt-6">
               <button
@@ -610,6 +626,362 @@ export default function UserSignupFlow() {
             </div>
           </div>
         )}
+
+        {/* Privacy Policy Modal */}
+        {/* Privacy Policy Modal */}
+{isPrivacyModalOpen && (
+  <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black/50"
+      onClick={() => {
+        setIsPrivacyModalOpen(false);
+        setHasScrolledPrivacy(false);
+      }}
+    ></div>
+
+    <div className="flex min-h-full items-center justify-center p-4">
+      <div
+        className="relative bg-black border border-blue-500 rounded-lg shadow-2xl w-full max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-center mt-6 mb-4">
+          <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center">
+            <Layers className="w-7 h-7 text-white" />
+          </div>
+        </div>
+
+        <h1 className="text-2xl font-bold text-white text-center mb-1">
+          Privacy Policy
+        </h1>
+        <p className="text-gray-400 text-center mb-6 text-sm">
+          Please review our subscription terms and conditions carefully.
+        </p>
+
+        <div className="px-6 pb-6">
+          <div className="border border-gray-700 rounded-xl p-6 max-h-80 overflow-y-auto" onScroll={handlePrivacyScroll}>
+            <div className="text-center mb-6 pb-4 border-b border-gray-800">
+              <h2 className="text-xl font-bold text-white mb-2">
+                Subscription Terms & Conditions
+              </h2>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">
+                Last Updated: November 19, 2025
+              </p>
+            </div>
+            
+            <div className="space-y-6 text-gray-300 leading-relaxed">
+              <p className="text-sm">
+                These Terms &amp; Conditions ("Terms") govern the use of paid
+                subscription services provided by IntelVox.ai ("Company",
+                "we", "our", "us"). By purchasing a paid subscription,
+                you ("Client", "you", "your") agree to be bound by these
+                Terms.
+              </p>
+
+              <div className="pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">1.</span>
+                  Subscription Services
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">1.1</span> IntelVox.ai provides AI-powered inbound and outbound
+                    voice automation tools, dashboards, analytics, and related
+                    features ("Services").
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">1.2</span> Subscription plans, features, and pricing are displayed
+                    on our website or shared directly with you.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">2.</span>
+                  Account Registration
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">2.1</span> You must provide accurate, current, and complete
+                    information when creating an account.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">2.2</span> You are responsible for maintaining the
+                    confidentiality of your login credentials.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">2.3</span> You are responsible for all actions taken under your
+                    account.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">3.</span>
+                  Payment &amp; Billing
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">3.1</span> Subscription fees are billed in advance on a monthly or
+                    annual basis, depending on your chosen plan.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">3.2</span> All payments are non-refundable unless required by law.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">3.3</span> If a payment fails, we may suspend or terminate your
+                    access to the Services.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">4.</span>
+                  Use of Client Data
+                </h3>
+                <p className="text-xs text-gray-400 italic mb-3 pl-6">
+                  (Consent for Website &amp; Marketing Use)
+                </p>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">4.1</span> By purchasing a paid subscription, you grant
+                    IntelVox.ai permission to use the following information for
+                    marketing, promotional, and website display purposes: your
+                    company name, company logo, industry description, and a
+                    general description of your non-confidential use case.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">4.2</span> This consent allows us to display your details on our
+                    website (for example in "Our Clients" or "Trusted By"
+                    sections), in marketing materials, and in case studies,
+                    presentations, or pitch decks.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">4.3</span> You confirm that you have the authority to grant this
+                    consent on behalf of your company.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">4.4</span> You may withdraw this consent at any time by emailing
+                    support@intelvox.ai. Once withdrawn, we will remove your
+                    details from future marketing materials and update our
+                    website within a reasonable timeframe.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">5.</span>
+                  Client Responsibilities
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">5.1</span> You agree not to use the Services for unlawful,
+                    harmful, or fraudulent activities.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">5.2</span> You are responsible for all content, data, and
+                    communication processed through the platform using your
+                    account.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">6.</span>
+                  Intellectual Property
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">6.1</span> IntelVox.ai retains all rights to its platform,
+                    software, AI models, trademarks, branding, and all related
+                    materials.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">6.2</span> Your subscription grants you a limited,
+                    non-exclusive, non-transferable licence to use the
+                    Services.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">7.</span>
+                  Service Availability &amp; Updates
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">7.1</span> We aim to provide reliable uptime but do not guarantee
+                    uninterrupted service.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">7.2</span> We may update, modify, or discontinue features without
+                    notice.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">8.</span>
+                  Confidentiality
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">8.1</span> Both parties agree to keep non-public business
+                    information confidential.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">8.2</span> This does not apply to information already publicly
+                    available or independently developed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">9.</span>
+                  Data Protection &amp; Privacy
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">9.1</span> IntelVox.ai processes personal data in accordance with
+                    applicable data protection laws, including GDPR. Full
+                    details are available in our Privacy Policy.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">10.</span>
+                  Limitation of Liability
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">10.1</span> The Services are provided on an "as-is" basis.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">10.2</span> IntelVox.ai is not liable for indirect, incidental, or
+                    consequential damages.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">10.3</span> Our maximum liability shall not exceed the total
+                    subscription fees paid by you in the previous 12 months.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">11.</span>
+                  Termination
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">11.1</span> You may cancel at any time from your dashboard or by
+                    contacting support.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">11.2</span> We may terminate or suspend your account for breach of
+                    these Terms.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">11.3</span> Upon termination, your access to the Services ends
+                    immediately.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">12.</span>
+                  Changes to Terms
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">12.1</span> IntelVox.ai may update these Terms at any time.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">12.2</span> We will notify you of significant changes via email or
+                    dashboard notifications.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">13.</span>
+                  Governing Law
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    <span className="text-gray-400 font-medium">13.1</span> These Terms are governed by the laws of England &amp;
+                    Wales.
+                  </p>
+                  <p>
+                    <span className="text-gray-400 font-medium">13.2</span> Any disputes will be resolved in the courts of England
+                    &amp; Wales.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center">
+                  <span className="text-blue-500 mr-2">14.</span>
+                  Contact Information
+                </h3>
+                <div className="pl-6 space-y-2 text-sm">
+                  <p>
+                    For questions or support, please contact us at{" "}
+                    <span className="text-blue-400">support@intelvox.ai</span>.
+                  </p>
+                  <p className="pt-2 font-medium text-gray-200">
+                    By purchasing a subscription, you confirm that you have read and agreed to these Terms &amp;
+                    Conditions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPrivacyModalOpen(false);
+                setHasScrolledPrivacy(false);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-200 bg-gray-800 rounded-lg hover:bg-gray-700"
+            >
+              I Do Not Agree
+            </button>
+            <button
+              type="button"
+              disabled={!hasScrolledPrivacy}
+              onClick={() => {
+                setHasAgreedPrivacy(true);
+                setIsPrivacyModalOpen(false);
+                setStep("subscription");
+              }}
+              className={`px-4 py-2 text-sm font-medium rounded-lg shadow-sm ${
+                hasScrolledPrivacy
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                  : "bg-gray-700 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              I Agree
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       </div>
     </div>
   );
