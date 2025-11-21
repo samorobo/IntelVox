@@ -18,28 +18,81 @@ import {
   Pause,
   Search,
 } from "lucide-react";
+import axiosClient from "@/lib/axiosClient"; // Adjust import path as needed
 
 interface CallDetail {
   id: string;
-  name: string;
+  callSid: string;
+  tenantId: string;
+  callType: string;
+  direction: string;
+  status: string;
+  agent: {
+    id: string;
+    name: string;
+    voice: string;
+  };
   agentName: string;
-  tenant: string;
-  phone: string;
-  date: string;
-  time: string;
-  duration: string;
-  callDirection: string;
-  callStatus: string;
-  callDuration: string;
-  humanHandoff: string;
+  customerName: string;
+  customerNumber: string;
+  campaign: {
+    id: string;
+    name: string;
+  };
+  duration: number;
+  startTime: string;
+  endTime: string;
+  sentiment: string | null;
+  outcome: string | null;
+  recordingUrl: string;
   recordingStatus: string;
-  sentiment: string;
-  aiAgent: string;
-  outcome: string;
+  humanHandoffNeeded: boolean;
+  humanHandoffReason: string | null;
+  messages: Array<{
+    id: string;
+    callId: string;
+    role: string;
+    speaker: string;
+    content: string;
+    timestamp: string;
+    metadata: any;
+    createdAt: string;
+  }>;
+  analysis: {
+    id: string;
+    callId: string;
+    rating: number;
+    sentiment: string;
+    emotionScore: number;
+    callSummary: string;
+    keyTopics: string[];
+    resolutionStatus: string;
+    agentPerformance: {
+      performance: string;
+    };
+    customerSatisfaction: number;
+    fullTranscript: {
+      transcript: string;
+      messageCount: number;
+    };
+    createdAt: string;
+    updatedAt: string;
+  };
+  metadata: {
+    contactId: string;
+    labelName: string;
+    campaignName: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ApiResponse {
+  call: CallDetail;
 }
 
 interface TranscriptMessage {
-  id: number;
+  id: string;
   speaker: "customer" | "agent";
   text: string;
   timestamp: string;
@@ -51,82 +104,127 @@ export default function CallDetailPage() {
   const params = useParams();
   const router = useRouter();
   const callId = params?.id as string;
+  const tenantId = "cmhqjnjb50004vkiolo5br0qd"; // You might want to get this from context or params
 
+  const [callDetail, setCallDetail] = useState<CallDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "transcript">(
     "details"
   );
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState("12:02");
-  const [totalTime] = useState("23:00");
-  const [progress, setProgress] = useState(52);
+  const [currentTime, setCurrentTime] = useState("00:00");
+  const [progress, setProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-  const transcriptMessages: TranscriptMessage[] = [
-    {
-      id: 1,
-      speaker: "customer",
-      text: "Hello, I'm calling about my recent order that hasn't arrived yet.",
-      timestamp: "00:12",
-      date: "Sep 15, 2025",
-    },
-    {
-      id: 2,
-      speaker: "agent",
-      text: "I can help you with that. Could you please provide your order number?",
-      timestamp: "00:25",
-      date: "Sep 15, 2025",
-    },
-    {
-      id: 3,
-      speaker: "customer",
-      text: "Yes, it's ORD-7842. The delivery was supposed to be yesterday.",
-      timestamp: "00:38",
-      date: "Sep 15, 2025",
-    },
-    {
-      id: 4,
-      speaker: "agent",
-      text: "Thank you. I can see your order is currently at our distribution center. It should be delivered by tomorrow.",
-      timestamp: "01:15",
-      date: "Sep 15, 2025",
-    },
-    {
-      id: 5,
-      speaker: "customer",
-      text: "That's good to hear. I was getting worried because I need it for an important event.",
-      timestamp: "01:45",
-      date: "Sep 15, 2025",
-    },
-  ];
-
-  const filteredMessages = transcriptMessages.filter((message) =>
-    message.text.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   useEffect(() => {
     if (callId) {
-      console.log("Call ID from URL:", callId);
-      // Future: fetchCallDetail(callId);
+      fetchCallDetail();
     }
   }, [callId]);
 
-  const callDetail: CallDetail = {
-    id: "1",
-    name: "John Doe",
-    agentName: "Mr. Arjun Mehta",
-    tenant: "Acme Corp",
-    phone: "+1(545) 565-343",
-    date: "15 Sep 2025",
-    time: "8:07 PM",
-    duration: "23:00",
-    callDirection: "Outbound",
-    callStatus: "Exceeded",
-    callDuration: "23 min",
-    humanHandoff: "Yes",
-    recordingStatus: "On",
-    sentiment: "Negative",
-    aiAgent: "Solo Bot",
-    outcome: "Connected",
+  const fetchCallDetail = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axiosClient.get<ApiResponse>(
+        `/call/${tenantId}/${callId}`
+      );
+
+      if (response.data.call) {
+        setCallDetail(response.data.call);
+
+        // Calculate progress based on duration (assuming 100 seconds max for demo)
+        const duration = response.data.call.duration || 100;
+        setProgress(Math.min((duration / 100) * 100, 100));
+      } else {
+        setError("Failed to fetch call details");
+      }
+    } catch (err) {
+      setError("Error fetching call details");
+      console.error("Error fetching call details:", err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  const formatDuration = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  };
+
+  const getTotalTime = () => {
+    if (!callDetail) return "00:00";
+    return formatDuration(callDetail.duration);
+  };
+
+  const getSentimentDisplay = () => {
+    if (!callDetail) return "Neutral";
+    return callDetail.analysis?.sentiment || callDetail.sentiment || "Neutral";
+  };
+
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment?.toLowerCase()) {
+      case "positive":
+        return "text-green-600 dark:text-green-400";
+      case "negative":
+        return "text-red-600 dark:text-red-400";
+      default:
+        return "text-gray-600 dark:text-gray-400";
+    }
+  };
+
+  const getOutcomeDisplay = () => {
+    if (!callDetail) return "Completed";
+    return callDetail.outcome || "Completed";
+  };
+
+  const getHumanHandoffDisplay = () => {
+    if (!callDetail) return "No";
+    return callDetail.humanHandoffNeeded ? "Yes" : "No";
+  };
+
+  const getCallStatusDisplay = () => {
+    if (!callDetail) return "Completed";
+    return (
+      callDetail.status.charAt(0).toUpperCase() + callDetail.status.slice(1)
+    );
+  };
+
+  const transformMessages = (): TranscriptMessage[] => {
+    if (!callDetail?.messages) return [];
+
+    return callDetail.messages.map((message, index) => ({
+      id: message.id,
+      speaker: message.speaker as "customer" | "agent",
+      text: message.content,
+      timestamp: formatTime(message.timestamp),
+      date: formatDate(message.timestamp),
+    }));
+  };
+
+  const filteredMessages = transformMessages().filter((message) =>
+    message.text.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handlePlayPause = () => {
     setIsPlaying(!isPlaying);
@@ -141,16 +239,71 @@ export default function CallDetailPage() {
   };
 
   const handleDownloadRecording = () => {
-    console.log("Download recording");
+    if (callDetail?.recordingUrl) {
+      window.open(callDetail.recordingUrl, "_blank");
+    }
   };
 
   const handleDownloadTranscript = () => {
     console.log("Download transcript");
+    // Implement transcript download logic
   };
+
+  if (loading) {
+    return (
+      <>
+        <DashboardHeader title="Call Log" />
+        <div className="p-8">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Calls
+          </button>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="text-gray-500 dark:text-gray-400">
+              Loading call details...
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (error || !callDetail) {
+    return (
+      <>
+        <DashboardHeader title="Call Log" />
+        <div className="p-8">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Calls
+          </button>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="text-red-500 dark:text-red-400">
+              {error || "Call not found"}
+            </div>
+            <button
+              onClick={fetchCallDetail}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <DashboardHeader title={`Call Log (${callDetail.name})`} />
+      <DashboardHeader
+        title={`Call Log (${callDetail.customerName || "Unknown"})`}
+      />
 
       <div className="p-8">
         <button
@@ -215,7 +368,7 @@ export default function CallDetailPage() {
                             Call direction
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.callDirection}
+                            {callDetail.direction}
                           </div>
                         </div>
                       </div>
@@ -229,7 +382,7 @@ export default function CallDetailPage() {
                             Call outcome
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.outcome}
+                            {getOutcomeDisplay()}
                           </div>
                         </div>
                       </div>
@@ -243,7 +396,7 @@ export default function CallDetailPage() {
                             Human handoff
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.humanHandoff}
+                            {getHumanHandoffDisplay()}
                           </div>
                         </div>
                       </div>
@@ -256,8 +409,12 @@ export default function CallDetailPage() {
                           <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                             Sentiment
                           </div>
-                          <div className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">
-                            {callDetail.sentiment}
+                          <div
+                            className={`text-sm font-semibold truncate ${getSentimentColor(
+                              getSentimentDisplay()
+                            )}`}
+                          >
+                            {getSentimentDisplay()}
                           </div>
                         </div>
                       </div>
@@ -273,7 +430,7 @@ export default function CallDetailPage() {
                             Call date
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.date}
+                            {formatDate(callDetail.startTime)}
                           </div>
                         </div>
                       </div>
@@ -287,7 +444,7 @@ export default function CallDetailPage() {
                             Call time
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.time}
+                            {formatTime(callDetail.startTime)}
                           </div>
                         </div>
                       </div>
@@ -301,7 +458,7 @@ export default function CallDetailPage() {
                             Call duration
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.duration}
+                            {formatDuration(callDetail.duration)}
                           </div>
                         </div>
                       </div>
@@ -315,7 +472,7 @@ export default function CallDetailPage() {
                             AI Agent
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.aiAgent}
+                            {callDetail.agent?.name || callDetail.agentName}
                           </div>
                         </div>
                       </div>
@@ -331,7 +488,7 @@ export default function CallDetailPage() {
                             Customer name
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {callDetail.agentName}
+                            {callDetail.customerName}
                           </div>
                         </div>
                       </div>
@@ -345,7 +502,7 @@ export default function CallDetailPage() {
                             Customer number
                           </div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate font-mono">
-                            {callDetail.phone}
+                            {callDetail.customerNumber}
                           </div>
                         </div>
                       </div>
@@ -371,8 +528,8 @@ export default function CallDetailPage() {
                           <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                             Call status
                           </div>
-                          <div className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">
-                            {callDetail.callStatus}
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {getCallStatusDisplay()}
                           </div>
                         </div>
                       </div>
@@ -383,7 +540,9 @@ export default function CallDetailPage() {
                 <div className="bg-gray-900 rounded-lg p-6">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-sm text-gray-400">{currentTime}</span>
-                    <span className="text-sm text-gray-400">{totalTime}</span>
+                    <span className="text-sm text-gray-400">
+                      {getTotalTime()}
+                    </span>
                   </div>
 
                   <div className="mb-6">
@@ -488,7 +647,7 @@ export default function CallDetailPage() {
                                 }`}
                               >
                                 {message.speaker === "customer"
-                                  ? "Customer (Virtual Assistant)"
+                                  ? "Customer"
                                   : "Agent"}
                               </div>
                               <div className="flex items-center gap-2">
@@ -526,7 +685,9 @@ export default function CallDetailPage() {
                     <div className="text-center py-8">
                       <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-400 opacity-50" />
                       <p className="text-gray-500 dark:text-gray-400">
-                        No messages found matching your search.
+                        {callDetail.messages?.length === 0
+                          ? "No transcript available for this call."
+                          : "No messages found matching your search."}
                       </p>
                     </div>
                   )}
