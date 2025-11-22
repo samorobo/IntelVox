@@ -86,7 +86,7 @@ export default function CampaignsPage() {
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/campaign/${TENANT_ID}`);
+      const response = await axios.get(`${API_BASE_URL}campaign/${TENANT_ID}`);
       // Map backend response to match our interface
       const formattedCampaigns = response.data.map((campaign: any) => {
         const agent = aiAgents.find((a) => a.id === campaign.agentId);
@@ -214,7 +214,7 @@ export default function CampaignsPage() {
   const handleStartCall = async (campaignId: string) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/call/${TENANT_ID}/outbound`,
+        `${API_BASE_URL}call/${TENANT_ID}/outbound`,
         { campaignId }
       );
       toast.success("Outbound call started successfully");

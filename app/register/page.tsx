@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, KeyboardEvent, ChangeEvent } from "react";
+import React, { useState, useEffect, KeyboardEvent, ChangeEvent } from "react";
 import { Layers, ArrowLeft, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
+import axiosClient from "@/lib/axiosClient";
 
 export default function UserSignupFlow() {
   const router = useRouter();
@@ -12,83 +13,43 @@ export default function UserSignupFlow() {
   const [email, setEmail] = useState<string>("");
   const [otp, setOtp] = useState<string[]>(["", "", "", ""]);
   const [profile, setProfile] = useState({
-    name: "",
-    phone: "",
+    name: ""
   });
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
     "monthly"
   );
-  const [selectedPlan, setSelectedPlan] = useState<string>("starter");
+  const [plans, setPlans] = useState<any[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [hasAgreedPrivacy, setHasAgreedPrivacy] = useState(false);
   const [hasScrolledPrivacy, setHasScrolledPrivacy] = useState(false);
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
+  const [error, setError] = useState<string>("");
 
-  const plans = [
-    {
-      id: "starter",
-      name: "Starter",
-      description:
-        "Perfect for individuals and small teams just getting started",
-      isActive: true,
-      billing: {
-        monthly: { price: "Free" },
-        yearly: { price: "Free" },
-      },
-      features: [
-        "1 AI agent",
-        "2,000 minutes / month",
-        "Basic analytics",
-        "Email support",
-      ],
-      totalSubscribers: 290,
-    },
-    {
-      id: "business",
-      name: "Business",
-      description: "Designed for growing teams needing more scale and features",
-      isActive: true,
-      billing: {
-        monthly: {
-          price: "$89",
-          originalPrice: "$199",
-        },
-        yearly: {
-          price: "$900",
-          originalPrice: "$2300",
-        },
-      },
-      features: [
-        "5 AI agents",
-        "5,000 minutes / month",
-        "Advanced analytics & call recording",
-        "Priority support",
-      ],
-      totalSubscribers: 290,
-    },
-    {
-      id: "enterprise",
-      name: "Enterprise",
-      description: "Tailored for large organizations with advanced needs",
-      isActive: true,
-      billing: {
-        monthly: {
-          price: "$199",
-          originalPrice: "$299",
-        },
-        yearly: {
-          price: "$1800",
-          originalPrice: "$2800",
-        },
-      },
-      features: [
-        "Unlimited AI agents",
-        "Unlimited minutes / month",
-        "Advanced analytics & call recording",
-        "Custom integrations & SLA",
-      ],
-      totalSubscribers: 290,
-    },
-  ];
+  // Fetch subscription plans from backend
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await axiosClient.get("/plans");
+        const data = Array.isArray(response.data) ? response.data : [];
+        setPlans(data);
+        if (data.length > 0) {
+          setSelectedPlan(data[0].id);
+        }
+      } catch (err: any) {
+        console.error("Failed to load plans:", err);
+        setError(
+          err?.response?.data?.message ||
+            "Failed to load plans. Please refresh and try again."
+        );
+      }
+    };
+
+    fetchPlans();
+  }, []);
 
   const steps = [
     { id: "social", name: "Sign Up" },
@@ -103,9 +64,31 @@ export default function UserSignupFlow() {
     setStep("otp");
   };
 
-  const handleEmailSubmit = (): void => {
-    if (email && email.includes("@")) {
-      setStep("otp");
+  const handleEmailSubmit = async (): Promise<void> => {
+    if (!email || !email.includes("@")) {
+      return;
+    }
+
+    setIsSendingOtp(true);
+    setError("");
+
+    try {
+      const response = await axiosClient.post("/otp/send", {
+        email,
+        purpose: "signup",
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        setIsOtpSent(true);
+        setError("");
+        setStep("otp");
+      }
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || "Failed to send OTP. Please try again."
+      );
+    } finally {
+      setIsSendingOtp(false);
     }
   };
 
@@ -126,11 +109,6 @@ export default function UserSignupFlow() {
       ) as HTMLInputElement;
       if (nextInput) nextInput.focus();
     }
-
-    const currentOtp = [...newOtp].join("");
-    if (currentOtp.length === 4 && currentOtp === "1234") {
-      handleOtpSubmit();
-    }
   };
 
   const handleOtpKeyDown = (
@@ -145,17 +123,36 @@ export default function UserSignupFlow() {
     }
   };
 
-  const handleOtpSubmit = (): void => {
+  const handleOtpSubmit = async (): Promise<void> => {
     const otpValue = otp.join("");
-    if (otpValue.length === 4) {
-      if (otpValue === "1234") {
+    if (otpValue.length !== 4) {
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    setError("");
+
+    try {
+      const response = await axiosClient.post("/otp/verify", {
+        email,
+        otp: otpValue,
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        setError("");
         setStep("profile");
       }
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || "Invalid OTP. Please try again."
+      );
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
   const handleProfileSubmit = (): void => {
-    if (profile.name && profile.phone) {
+    if (profile.name) {
       setStep("subscription");
     }
   };
@@ -164,8 +161,32 @@ export default function UserSignupFlow() {
     setProfile((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubscriptionSubmit = (): void => {
-    router.push("/dashboard");
+  const handleSubscriptionSubmit = async (): Promise<void> => {
+    if (!profile.name || !email || !selectedPlan) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+
+    setIsCreatingTenant(true);
+    setError("");
+
+    try {
+      const response = await axiosClient.post("/tenants", {
+        name: profile.name,
+        email,
+        planId: selectedPlan,
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        router.push("/dashboard");
+      }
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || "Failed to create account. Please try again."
+      );
+    } finally {
+      setIsCreatingTenant(false);
+    }
   };
 
   const handlePrivacyScroll = (
@@ -178,6 +199,7 @@ export default function UserSignupFlow() {
   };
 
   const handleBack = (): void => {
+    setError("");
     if (step === "otp") setStep("social");
     else if (step === "profile") setStep("otp");
     else if (step === "subscription") setStep("profile");
@@ -297,12 +319,43 @@ export default function UserSignupFlow() {
               />
             </div>
 
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
             <button
               onClick={handleEmailSubmit}
-              disabled={!email || !email.includes("@")}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200"
+              disabled={!email || !email.includes("@") || isSendingOtp}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
-              Continue with email
+              {isSendingOtp ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Sending...
+                </>
+              ) : (
+                "Continue with email"
+              )}
             </button>
 
             <p className="text-gray-400 text-sm text-center mt-6">
@@ -340,11 +393,12 @@ export default function UserSignupFlow() {
               We've sent a 4-digit code to
               <br />
               <span className="text-white">{email}</span>
-              <br />
-              <span className="text-blue-400 text-sm mt-2 block">
-                Use static OTP: <strong>1234</strong>
-              </span>
             </p>
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
 
             <div className="flex gap-3 justify-center mb-6">
               {otp.map((digit, index) => (
@@ -368,10 +422,36 @@ export default function UserSignupFlow() {
 
             <button
               onClick={handleOtpSubmit}
-              disabled={otp.join("").length !== 4}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200"
+              disabled={otp.join("").length !== 4 || isVerifyingOtp}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
-              Verify & Continue
+              {isVerifyingOtp ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Verifying...
+                </>
+              ) : (
+                "Verify & Continue"
+              )}
             </button>
 
             <div className="text-center mt-6">
@@ -383,8 +463,12 @@ export default function UserSignupFlow() {
               </button>
               <p className="text-gray-400 text-sm mt-4">
                 Didn't receive the code?{" "}
-                <button className="text-blue-500 hover:text-blue-400">
-                  Resend
+                <button
+                  onClick={handleEmailSubmit}
+                  disabled={isSendingOtp}
+                  className="text-blue-500 hover:text-blue-400 disabled:text-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isSendingOtp ? "Sending..." : "Resend"}
                 </button>
               </p>
             </div>
@@ -413,7 +497,7 @@ export default function UserSignupFlow() {
                   htmlFor="name"
                   className="block text-white text-sm font-medium mb-2"
                 >
-                  Name <span className="text-red-500">*</span>
+                  Tenant Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="name"
@@ -443,7 +527,7 @@ export default function UserSignupFlow() {
                 />
               </div>
 
-              <div>
+              {/* <div>
                 <label
                   htmlFor="phone"
                   className="block text-white text-sm font-medium mb-2"
@@ -460,12 +544,13 @@ export default function UserSignupFlow() {
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                   placeholder="Enter your phone number"
                 />
-              </div>
+              </div> */}
+              
             </div>
 
             <button
               onClick={handleProfileSubmit}
-              disabled={!profile.name || !profile.phone || !hasAgreedPrivacy}
+              disabled={!profile.name || !hasAgreedPrivacy}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200"
             >
               Proceed
@@ -609,11 +694,43 @@ export default function UserSignupFlow() {
               ))}
             </div>
 
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
             <button
               onClick={handleSubscriptionSubmit}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition duration-200"
+              disabled={isCreatingTenant}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
-              Complete Signup
+              {isCreatingTenant ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Creating Account...
+                </>
+              ) : (
+                "Complete Signup"
+              )}
             </button>
 
             <div className="text-center mt-6">
