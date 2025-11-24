@@ -16,7 +16,8 @@ import {
   Phone,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import axios from "axios";
+import axiosClient from "@/lib/axiosClient";
+import { getTenantIdOrThrow } from "@/lib/utils";
 
 interface Campaign {
   id: string;
@@ -45,8 +46,6 @@ interface Label {
   name: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ;
-const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -86,7 +85,8 @@ export default function CampaignsPage() {
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}campaign/${TENANT_ID}`);
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/campaign/${tenantId}`);
       // Map backend response to match our interface
       const formattedCampaigns = response.data.map((campaign: any) => {
         const agent = aiAgents.find((a) => a.id === campaign.agentId);
@@ -118,7 +118,7 @@ export default function CampaignsPage() {
 
   const fetchAgents = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/agents`);
+      const response = await axiosClient.get(`/agents`);
       setAiAgents(response.data);
     } catch (error: any) {
       console.error("Error fetching agents:", error);
@@ -128,7 +128,8 @@ export default function CampaignsPage() {
 
   const fetchLabels = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/label/${TENANT_ID}`);
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/label/${tenantId}`);
       // Handle both array of objects and array of strings
       const labelsData = response.data;
       if (Array.isArray(labelsData)) {
@@ -213,8 +214,9 @@ export default function CampaignsPage() {
 
   const handleStartCall = async (campaignId: string) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}call/${TENANT_ID}/outbound`,
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.post(
+        `/call/${tenantId}/outbound`,
         { campaignId }
       );
       toast.success("Outbound call started successfully");
@@ -251,7 +253,6 @@ export default function CampaignsPage() {
         conversationRate: editingCampaign
           ? editingCampaign.conversationRate || "0%"
           : "0%",
-        tenantId: TENANT_ID,
         agentId: formData.agent,
       };
 
@@ -260,18 +261,20 @@ export default function CampaignsPage() {
         campaignPayload.labelId = formData.label;
       }
 
+      const tenantId = getTenantIdOrThrow();
+      campaignPayload.tenantId = tenantId;
       if (editingCampaign) {
         // Update campaign
-        const response = await axios.put(
-          `${API_BASE_URL}/campaign/${TENANT_ID}/${editingCampaign.id}`,
+        const response = await axiosClient.put(
+          `/campaign/${tenantId}/${editingCampaign.id}`,
           campaignPayload
         );
         toast.success("Campaign updated!");
         await fetchCampaigns();
       } else {
         // Create new campaign
-        const response = await axios.post(
-          `${API_BASE_URL}campaign/${TENANT_ID}`,
+        const response = await axiosClient.post(
+          `/campaign/${tenantId}`,
           campaignPayload
         );
         toast.success("Campaign created!");
@@ -545,8 +548,8 @@ export default function CampaignsPage() {
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                       {viewCampaign.totalCalls || "0"}
                     </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      +17% from last week
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Total number of calls in this campaign
                     </p>
                   </div>
                   <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
@@ -559,8 +562,8 @@ export default function CampaignsPage() {
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                       {viewCampaign.contactsReached || "0"}
                     </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      +7.1% reach rate
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Total unique contacts reached in this campaign
                     </p>
                   </div>
                   <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
@@ -573,8 +576,8 @@ export default function CampaignsPage() {
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                       {viewCampaign.conversationRate || "0%"}
                     </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      +2.2% improvement
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Percentage of calls that resulted in conversations
                     </p>
                   </div>
                 </div>

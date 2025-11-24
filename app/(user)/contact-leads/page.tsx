@@ -6,8 +6,9 @@ import axiosClient from "@/lib/axiosClient";
 import axios from "axios";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
+import { getTenantId, getTenantIdOrThrow } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
-const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
 const LABEL_API_BASE_URL = "https://backend.developmentsite.space";
 
 interface Lead {
@@ -43,6 +44,7 @@ interface Label {
 }
 
 export default function ContactLeadsPage() {
+  const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,9 +72,25 @@ export default function ContactLeadsPage() {
 
   // Fetch contacts and labels on component mount
   useEffect(() => {
-    fetchContacts();
-    fetchLabels();
-  }, []);
+    // Only run on client side and if tenantId exists
+    if (typeof window !== "undefined") {
+      const tenantId = getTenantId();
+      if (tenantId) {
+        fetchContacts();
+        fetchLabels();
+      } else {
+        setLoading(false);
+        setMessage({ 
+          text: "Please log in to view contacts.", 
+          type: "error" 
+        });
+        // Redirect to login after a short delay
+        setTimeout(() => {
+          router.push("/");
+        }, 2000);
+      }
+    }
+  }, [router]);
 
   // Auto-hide messages after 3 seconds
   useEffect(() => {
@@ -85,13 +103,25 @@ export default function ContactLeadsPage() {
   const fetchContacts = async () => {
     try {
       setLoading(true);
-      const response = await axiosClient.get(`/contact/${TENANT_ID}/`);
+      const tenantId = getTenantId();
+      if (!tenantId) {
+        setMessage({ 
+          text: "Tenant ID not found. Please log in again.", 
+          type: "error" 
+        });
+        router.push("/");
+        return;
+      }
+      const response = await axiosClient.get(`/contact/${tenantId}/`);
       setLeads(response.data);
     } catch (error: any) {
       console.error("Error fetching contacts:", error);
       console.error("Error details:", error.response?.data);
+      const errorMessage = error.message?.includes("Tenant ID not found")
+        ? "Please log in to view contacts."
+        : error.response?.data?.error || "Failed to load contacts. Please try again.";
       setMessage({ 
-        text: error.response?.data?.error || "Failed to load contacts. Please try again.", 
+        text: errorMessage, 
         type: "error" 
       });
     } finally {
@@ -102,7 +132,12 @@ export default function ContactLeadsPage() {
   const fetchLabels = async () => {
     try {
       setLoadingLabels(true);
-      const response = await axios.get(`${LABEL_API_BASE_URL}/label/${TENANT_ID}`);
+      const tenantId = getTenantId();
+      if (!tenantId) {
+        // Don't show error for labels, just skip fetching
+        return;
+      }
+      const response = await axios.get(`${LABEL_API_BASE_URL}/label/${tenantId}`);
       // Handle both array of objects and array of strings
       const labelsData = response.data;
       if (Array.isArray(labelsData)) {
@@ -130,7 +165,15 @@ export default function ContactLeadsPage() {
     if (window.confirm(`Are you sure you want to delete ${lead.name}?`)) {
       try {
         setDeleting(id);
-        await axiosClient.delete(`/contact/${TENANT_ID}/${id}`);
+        const tenantId = getTenantId();
+        if (!tenantId) {
+          setMessage({ 
+            text: "Please log in to delete contacts.", 
+            type: "error" 
+          });
+          return;
+        }
+        await axiosClient.delete(`/contact/${tenantId}/${id}`);
         setMessage({ text: "Contact deleted successfully.", type: "success" });
         // Refetch contacts to ensure UI is in sync
         await fetchContacts();
@@ -280,14 +323,26 @@ export default function ContactLeadsPage() {
 
       // Only send fields that the backend Contact model expects
       // Based on your API sample, this is just name and number
+
+
+      
       const contactPayload = {
         name: addContactFormData.name,
         number: addContactFormData.number,
-        labelId: addContactFormData.label
+        labelId: addContactFormData.label,
+        consent: addContactFormData.consent 
       };
 
       console.log("Creating contact with payload:", contactPayload);
-      const response = await axiosClient.post(`/contact/${TENANT_ID}/`, contactPayload);
+      const tenantId = getTenantId();
+      if (!tenantId) {
+        setMessage({ 
+          text: "Please log in to add contacts.", 
+          type: "error" 
+        });
+        return;
+      }
+      const response = await axiosClient.post(`/contact/${tenantId}/`, contactPayload);
       console.log("Contact created successfully:", response.data);
       
       setMessage({ text: "Contact added successfully!", type: "success" });
@@ -341,7 +396,12 @@ export default function ContactLeadsPage() {
 
     try {
       setSubmitting(true);
-      const response = await axios.post(`${LABEL_API_BASE_URL}/label/${TENANT_ID}`, {
+      const tenantId = getTenantId();
+      if (!tenantId) {
+        setLabelError("Please log in to add labels.");
+        return;
+      }
+      const response = await axios.post(`${LABEL_API_BASE_URL}/label/${tenantId}`, {
         name: trimmedLabel,
       });
       
@@ -398,7 +458,15 @@ export default function ContactLeadsPage() {
       formData.append('file', uploadedFile);
       
       // TODO: Update this endpoint when bulk upload is implemented in backend
-      await axiosClient.post(`/contact/${TENANT_ID}/bulk-upload`, formData, {
+      const tenantId = getTenantId();
+      if (!tenantId) {
+        setMessage({ 
+          text: "Please log in to upload contacts.", 
+          type: "error" 
+        });
+        return;
+      }
+      await axiosClient.post(`/contact/${tenantId}/bulk-upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

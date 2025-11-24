@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import axios from "axios";
+import axiosClient from "@/lib/axiosClient";
 import { Eye, MoreVertical } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import {
@@ -73,8 +73,8 @@ interface FormErrors {
   knowledgeBase?: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-const TENANT_ID = "cmhqjnjb50004vkiolo5br0qd";
+import { getTenantIdOrThrow } from "@/lib/utils";
+
 const VOICE_OPTIONS = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
 
 export default function AIAgentPage() {
@@ -116,11 +116,12 @@ export default function AIAgentPage() {
         setLoading(true);
         setLoadingConfigs(true);
 
+        const tenantId = getTenantIdOrThrow();
         const [agentsResponse, twilioResponse, llmResponse] = await Promise.all(
           [
-            axios.get(`${API_BASE_URL}agents/${TENANT_ID}`),
-            axios.get(`${API_BASE_URL}twilio/${TENANT_ID}`),
-            axios.get(`${API_BASE_URL}llm/${TENANT_ID}`),
+            axiosClient.get(`/agents/${tenantId}`),
+            axiosClient.get(`/twilio/${tenantId}`),
+            axiosClient.get(`/llm/${tenantId}`),
           ]
         );
 
@@ -165,7 +166,7 @@ export default function AIAgentPage() {
       const agent = agents.find((a) => a.id === id);
       const newStatus = agent?.status === "active" ? "inactive" : "active";
 
-      await axios.put(`${API_BASE_URL}agent/${id}`, { status: newStatus });
+      await axiosClient.put(`/agent/${id}`, { status: newStatus });
 
       setAgents((prev) =>
         prev.map((agent) =>
@@ -287,16 +288,17 @@ export default function AIAgentPage() {
     try {
       setSubmitting(true);
 
+      const tenantId = getTenantIdOrThrow();
       const agentPayload = {
         ...formData,
-        tenantId: TENANT_ID,
+        tenantId: tenantId,
         conversations: 0,
         retention: 0,
       };
 
       if (editingAgent) {
-        const response = await axios.put(
-          `${API_BASE_URL}agent/${editingAgent.id}`,
+        const response = await axiosClient.put(
+          `/agent/${editingAgent.id}`,
           agentPayload
         );
         setAgents((prev) =>
@@ -306,10 +308,10 @@ export default function AIAgentPage() {
         );
         toast.success("Agent updated successfully!");
       } else {
-        const response = await axios.post(`${API_BASE_URL}agent`, agentPayload);
+        const response = await axiosClient.post(`/agent`, agentPayload);
         // Refresh agents to get the updated data with configs
-        const agentsResponse = await axios.get(
-          `${API_BASE_URL}agents/${TENANT_ID}`
+        const agentsResponse = await axiosClient.get(
+          `/agents/${tenantId}`
         );
         setAgents(agentsResponse.data);
         toast.success("Agent created successfully!");
@@ -328,7 +330,7 @@ export default function AIAgentPage() {
     if (!confirm("Are you sure you want to delete this agent?")) return;
 
     try {
-      await axios.delete(`${API_BASE_URL}agent/${id}`);
+      await axiosClient.delete(`/agent/${id}`);
       setAgents((prev) => prev.filter((agent) => agent.id !== id));
       toast.success("Agent deleted successfully");
     } catch (err) {

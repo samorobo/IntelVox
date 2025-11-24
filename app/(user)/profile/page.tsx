@@ -1,58 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import axiosClient from "@/lib/axiosClient";
+import { getTenantIdOrThrow } from "@/lib/utils";
+
+interface StatCard {
+  title: string;
+  value: string | number;
+}
 
 export default function DashboardPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("Month");
+  const [stats, setStats] = useState<StatCard[]>([]);
+  const [chartData, setChartData] = useState<
+    { month: string; attempted: number; connected: number; converted: number }[]
+  >([]);
 
-  const stats = [
-    {
-      title: "Calls attempted",
-      value: "234",
-      change: "+5%",
-      changeType: "increase",
-      period: "vs last month",
-    },
-    {
-      title: "Calls connected",
-      value: "435",
-      change: "+2%",
-      changeType: "decrease",
-      period: "vs last month",
-    },
-    {
-      title: "Calls converted",
-      value: "123",
-      change: "+2%",
-      changeType: "decrease",
-      period: "vs last month",
-    },
-    {
-      title: "AI consumers in calls",
-      value: "89",
-      change: "+4%",
-      changeType: "increase",
-      period: "vs last month",
-    },
-  ];
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        const tenantId = getTenantIdOrThrow();
+        const response = await axiosClient.get(`/dashboard/${tenantId}`);
+        const data = response.data?.data || response.data;
 
-  const chartData = [
-    { month: "May", attempted: 180, connected: 320, converted: 140 },
-    { month: "Jun", attempted: 190, connected: 340, converted: 150 },
-    { month: "Jul", attempted: 200, connected: 360, converted: 160 },
-    { month: "Aug", attempted: 185, connected: 350, converted: 145 },
-    { month: "Sep", attempted: 195, connected: 370, converted: 155 },
-    { month: "Oct", attempted: 210, connected: 390, converted: 170 },
-    { month: "Nov", attempted: 205, connected: 380, converted: 165 },
-    { month: "Dec", attempted: 220, connected: 400, converted: 180 },
-    { month: "Jan '25", attempted: 215, connected: 395, converted: 175 },
-    { month: "Feb", attempted: 225, connected: 410, converted: 185 },
-    { month: "Mar", attempted: 230, connected: 425, converted: 190 },
-    { month: "Apr", attempted: 234, connected: 435, converted: 195 },
-  ];
+        setStats([
+          {
+            title: "Total calls",
+            value: data?.totalCalls ?? 0,
+          },
+          {
+            title: "Total Outbound",
+            value: data?.totalOutbound ?? 0,
+          },
+          {
+            title: "Total Inbound",
+            value: data?.totalInbound ?? 0,
+          },
+          {
+            title: "Total HandOffs",
+            value: data?.totalHandoff ?? 0,
+          },
+        ]);
+
+        const monthlyData = Array.isArray(data?.monthly)
+          ? data.monthly.map(
+              (item: {
+                monthName?: string;
+                totalCalls?: number;
+                outbound?: number;
+                handoff?: number;
+              }) => ({
+                month: item.monthName || "N/A",
+                attempted: item.totalCalls ?? 0,
+                connected: item.outbound ?? 0,
+                converted: item.handoff ?? 0,
+              })
+            )
+          : [];
+
+        setChartData(monthlyData);
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+        // If the request fails, keep stats as empty or zeros; UI will simply show nothing / 0s
+      }
+    };
+
+    fetchDashboardStats();
+  }, []);
 
   return (
     <>
@@ -73,20 +90,6 @@ export default function DashboardPage() {
                   <p className="text-3xl font-bold text-gray-900 dark:text-white">
                     {stat.value}
                   </p>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span
-                      className={`font-medium ${
-                        stat.changeType === "increase"
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {stat.change}
-                    </span>
-                    <span className="text-gray-500 dark:text-gray-400">
-                      {stat.period}
-                    </span>
-                  </div>
                 </div>
               </div>
             ))}

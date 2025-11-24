@@ -85,7 +85,7 @@ export default function UserSignupFlow() {
       }
     } catch (err: any) {
       setError(
-        err.response?.data?.message || "Failed to send OTP. Please try again."
+        err.response?.data?.message
       );
     } finally {
       setIsSendingOtp(false);
@@ -171,14 +171,19 @@ export default function UserSignupFlow() {
     setError("");
 
     try {
-      const response = await axiosClient.post("/tenants", {
+      const response = await axiosClient.post("/tenant", {
         name: profile.name,
         email,
         planId: selectedPlan,
       });
 
       if (response.status === 200 || response.status === 201) {
-        router.push("/dashboard");
+        // Save tenant ID to localStorage
+        const tenantId = response.data?.id || response.data?.tenantId || response.data?.tenant?.id;
+        if (tenantId) {
+          localStorage.setItem("tenantId", tenantId);
+        }
+        router.push("/profile");
       }
     } catch (err: any) {
       setError(
@@ -676,7 +681,7 @@ export default function UserSignupFlow() {
                   </div>
 
                   <ul className="space-y-2 mb-4">
-                    {plan.features.map((feature, index) => (
+                    {plan.features.map((feature: string, index: number) => (
                       <li
                         key={index}
                         className="text-gray-400 text-sm flex items-center"

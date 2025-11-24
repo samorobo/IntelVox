@@ -3,20 +3,44 @@
 import { useState, KeyboardEvent, ChangeEvent } from "react";
 import { Layers, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import axiosClient from "@/lib/axiosClient";
 
 export default function UserLoginFlow() {
   const router = useRouter();
   const [step, setStep] = useState<"social" | "otp">("social");
   const [email, setEmail] = useState<string>("");
   const [otp, setOtp] = useState<string[]>(["", "", "", ""]);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [error, setError] = useState<string>("");
 
   const handleSocialSubmit = (): void => {
     setStep("otp");
   };
 
-  const handleEmailSubmit = (): void => {
-    if (email && email.includes("@")) {
-      setStep("otp");
+  const handleEmailSubmit = async (): Promise<void> => {
+    if (!email || !email.includes("@")) {
+      return;
+    }
+
+    setIsSendingOtp(true);
+    setError("");
+
+    try {
+      const response = await axiosClient.post("/otp/send/login", {
+        email,
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        setError("");
+        setStep("otp");
+      }
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || "Failed to send OTP. Please try again."
+      );
+    } finally {
+      setIsSendingOtp(false);
     }
   };
 
@@ -37,11 +61,6 @@ export default function UserLoginFlow() {
       ) as HTMLInputElement;
       if (nextInput) nextInput.focus();
     }
-
-    const currentOtp = [...newOtp].join("");
-    if (currentOtp.length === 4 && currentOtp === "2468") {
-      handleOtpSubmit();
-    }
   };
 
   const handleOtpKeyDown = (
@@ -56,16 +75,60 @@ export default function UserLoginFlow() {
     }
   };
 
-  const handleOtpSubmit = (): void => {
+  const handleOtpSubmit = async (): Promise<void> => {
     const otpValue = otp.join("");
-    if (otpValue.length === 4) {
-      if (otpValue === "2468") {
-        router.push("/dashboard");
+    if (otpValue.length !== 4) {
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    setError("");
+
+    try {
+      const response = await axiosClient.post("/otp/verify", {
+        email,
+        otp: otpValue,
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        // Save tenant ID to localStorage (required for subsequent requests)
+        // Backend response example:
+        // { success: true, message: "Email verified successfully", data: { tenant: { id: "..." }, ... } }
+        const apiData = response.data;
+        const innerData = apiData?.data;
+
+        const tenantId =
+          innerData?.tenantId ||
+          innerData?.tenant?.id ||
+          innerData?.id ||
+          apiData?.tenantId ||
+          apiData?.tenant?.id ||
+          apiData?.id;
+
+        if (!tenantId) {
+          // If backend does not return a tenantId, do not proceed
+          setError(
+            "No tenant found for this account. Please complete signup or contact support."
+          );
+          return;
+        }
+
+        localStorage.setItem("tenantId", tenantId);
+
+        setError("");
+        router.push("/profile");
       }
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || "Invalid OTP. Please try again."
+      );
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
   const handleBack = (): void => {
+    setError("");
     if (step === "otp") setStep("social");
   };
 
@@ -136,12 +199,43 @@ export default function UserLoginFlow() {
               />
             </div>
 
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
             <button
               onClick={handleEmailSubmit}
-              disabled={!email || !email.includes("@")}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200"
+              disabled={!email || !email.includes("@") || isSendingOtp}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
-              Continue with email
+              {isSendingOtp ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Sending...
+                </>
+              ) : (
+                "Continue with email"
+              )}
             </button>
 
             <p className="text-gray-400 text-sm text-center mt-6">
@@ -169,11 +263,12 @@ export default function UserLoginFlow() {
               We've sent a 4-digit code to
               <br />
               <span className="text-white">{email}</span>
-              <br />
-              <span className="text-blue-400 text-sm mt-2 block">
-                Use static OTP: <strong>2468</strong>
-              </span>
             </p>
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
 
             <div className="flex gap-3 justify-center mb-6">
               {otp.map((digit, index) => (
@@ -197,10 +292,36 @@ export default function UserLoginFlow() {
 
             <button
               onClick={handleOtpSubmit}
-              disabled={otp.join("").length !== 4}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200"
+              disabled={otp.join("").length !== 4 || isVerifyingOtp}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
-              Sign In
+              {isVerifyingOtp ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Verifying...
+                </>
+              ) : (
+                "Sign In"
+              )}
             </button>
 
             <div className="text-center mt-6">
@@ -212,8 +333,12 @@ export default function UserLoginFlow() {
               </button>
               <p className="text-gray-400 text-sm mt-4">
                 Didn't receive the code?{" "}
-                <button className="text-blue-500 hover:text-blue-400">
-                  Resend
+                <button
+                  onClick={handleEmailSubmit}
+                  disabled={isSendingOtp}
+                  className="text-blue-500 hover:text-blue-400 disabled:text-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isSendingOtp ? "Sending..." : "Resend"}
                 </button>
               </p>
             </div>

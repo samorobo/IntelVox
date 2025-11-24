@@ -67,9 +67,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    if (savedTheme === "dark") {
-      setDarkMode(true);
+    // Only access localStorage on client side
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "dark") {
+        setDarkMode(true);
+      }
     }
   }, []);
 

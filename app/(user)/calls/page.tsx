@@ -5,6 +5,7 @@ import DashboardHeader from "@/components/DashboardHeader";
 import { Search, Download, Eye } from "lucide-react";
 import Link from "next/link";
 import axiosClient from "@/lib/axiosClient";
+import { getTenantIdOrThrow } from "@/lib/utils";
 
 interface Call {
   id: string;
@@ -42,8 +43,9 @@ export default function CallsTranscriptPage() {
     try {
       setLoading(true);
       setError(null);
+      const tenantId = getTenantIdOrThrow();
       const response = await axiosClient.get<ApiResponse>(
-        "/call/cmhqjnjb50004vkiolo5br0qd"
+        `/call/${tenantId}`
       );
 
       if (response.data.success) {

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import axios from "axios";
+import axiosClient from "@/lib/axiosClient";
 import DashboardHeader from "@/components/DashboardHeader";
 import { Search, Download, Plus, X, Loader2, Edit, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { getTenantIdOrThrow } from "@/lib/utils";
 
 interface TeamMember {
   id: string;
@@ -27,7 +28,6 @@ interface FormErrors {
   role?: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function TeamManagementPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -45,13 +45,13 @@ export default function TeamManagementPage() {
   const [submitting, setSubmitting] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
-  const tenantId = "cmh1u92c80002txnoc32xlu3h";
   useEffect(() => {
     const loadTeamMembers = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(
-          `${API_BASE_URL}tenant/${tenantId}/members`
+        const tenantId = getTenantIdOrThrow();
+        const response = await axiosClient.get(
+          `/tenant/${tenantId}/members`
         );
         setTeamMembers(response.data);
         setFilteredMembers(response.data);
@@ -64,7 +64,7 @@ export default function TeamManagementPage() {
     };
 
     loadTeamMembers();
-  }, [tenantId]);
+  }, []);
 
   useEffect(() => {
     let filtered = teamMembers;
@@ -84,9 +84,10 @@ export default function TeamManagementPage() {
   const toggleStatus = async (id: string) => {
     try {
       setStatusUpdating(id);
+      const tenantId = getTenantIdOrThrow();
 
-      const response = await axios.patch(
-        `${API_BASE_URL}tenant/${tenantId}/member/${id}/toggle-status`
+      const response = await axiosClient.patch(
+        `/tenant/${tenantId}/member/${id}/toggle-status`
       );
 
       setTeamMembers((prev) =>
@@ -155,11 +156,12 @@ export default function TeamManagementPage() {
 
     try {
       setSubmitting(true);
+      const tenantId = getTenantIdOrThrow();
 
       if (editingMember) {
         // Update existing member
-        const response = await axios.put(
-          `${API_BASE_URL}tenant/${tenantId}/member/${editingMember.id}`,
+        const response = await axiosClient.put(
+          `/tenant/${tenantId}/member/${editingMember.id}`,
           formData
         );
         setTeamMembers((prev) =>
@@ -170,8 +172,8 @@ export default function TeamManagementPage() {
         toast.success("Team member updated successfully!");
       } else {
         // Create new member
-        const response = await axios.post(
-          `${API_BASE_URL}tenant/${tenantId}/member`,
+        const response = await axiosClient.post(
+          `/tenant/${tenantId}/member`,
           formData
         );
         setTeamMembers((prev) => [response.data, ...prev]);
@@ -197,7 +199,8 @@ export default function TeamManagementPage() {
     if (!confirm("Are you sure you want to delete this team member?")) return;
 
     try {
-      await axios.delete(`${API_BASE_URL}tenant/${tenantId}/member/${id}`);
+      const tenantId = getTenantIdOrThrow();
+      await axiosClient.delete(`/tenant/${tenantId}/member/${id}`);
       setTeamMembers((prev) => prev.filter((member) => member.id !== id));
       toast.success("Team member deleted successfully");
     } catch (err) {

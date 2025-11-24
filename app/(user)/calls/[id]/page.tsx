@@ -19,6 +19,7 @@ import {
   Search,
 } from "lucide-react";
 import axiosClient from "@/lib/axiosClient"; // Adjust import path as needed
+import { getTenantIdOrThrow } from "@/lib/utils";
 
 interface CallDetail {
   id: string;
@@ -104,7 +105,6 @@ export default function CallDetailPage() {
   const params = useParams();
   const router = useRouter();
   const callId = params?.id as string;
-  const tenantId = "cmhqjnjb50004vkiolo5br0qd"; // You might want to get this from context or params
 
   const [callDetail, setCallDetail] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +127,7 @@ export default function CallDetailPage() {
     try {
       setLoading(true);
       setError(null);
+      const tenantId = getTenantIdOrThrow();
       const response = await axiosClient.get<ApiResponse>(
         `/call/${tenantId}/${callId}`
       );
