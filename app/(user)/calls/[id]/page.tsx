@@ -116,6 +116,9 @@ export default function CallDetailPage() {
   const [currentTime, setCurrentTime] = useState("00:00");
   const [progress, setProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
 
   useEffect(() => {
     if (callId) {
@@ -146,6 +149,33 @@ export default function CallDetailPage() {
       console.error("Error fetching call details:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRecordingUrl = async () => {
+    if (!callDetail) return;
+
+    try {
+      setAudioLoading(true);
+      setAudioError(null);
+      const tenantId = getTenantIdOrThrow();
+
+      const response = await axiosClient.get(
+        `/call/${tenantId}/calls/${callId}/recording`,
+        {
+          responseType: "blob", // Important for handling audio files
+        }
+      );
+
+      // Create a blob URL from the response
+      const blob = new Blob([response.data], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+    } catch (err) {
+      setAudioError("Error fetching recording");
+      console.error("Error fetching recording:", err);
+    } finally {
+      setAudioLoading(false);
     }
   };
 
@@ -227,8 +257,15 @@ export default function CallDetailPage() {
     message.text.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+  const handlePlayPause = async () => {
+    if (!audioUrl) {
+      await fetchRecordingUrl();
+    }
+
+    if (audioUrl) {
+      setIsPlaying(!isPlaying);
+      // Audio player logic coming soon
+    }
   };
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -239,9 +276,25 @@ export default function CallDetailPage() {
     router.back();
   };
 
-  const handleDownloadRecording = () => {
-    if (callDetail?.recordingUrl) {
-      window.open(callDetail.recordingUrl, "_blank");
+  const handleDownloadRecording = async () => {
+    if (!audioUrl) {
+      // Fetch the recording first if not already available
+      await fetchRecordingUrl();
+    }
+
+    if (audioUrl) {
+      try {
+        // Create a temporary anchor element to trigger download
+        const a = document.createElement("a");
+        a.href = audioUrl;
+        a.download = `call-recording-${callId}.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (err) {
+        console.error("Error downloading recording:", err);
+        setAudioError("Error downloading recording");
+      }
     }
   };
 
@@ -249,6 +302,15 @@ export default function CallDetailPage() {
     console.log("Download transcript");
     // Implement transcript download logic
   };
+
+  // Clean up blob URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
 
   if (loading) {
     return (
@@ -351,12 +413,27 @@ export default function CallDetailPage() {
                     </h3>
                     <button
                       onClick={handleDownloadRecording}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                      disabled={audioLoading}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Download className="w-4 h-4" />
-                      Download Recording
+                      {audioLoading ? (
+                        "Loading..."
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          Download Recording
+                        </>
+                      )}
                     </button>
                   </div>
+
+                  {audioError && (
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-red-600 dark:text-red-400 text-sm">
+                        {audioError}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -566,9 +643,12 @@ export default function CallDetailPage() {
                     </button>
                     <button
                       onClick={handlePlayPause}
-                      className="flex items-center justify-center w-12 h-12 bg-blue-600 rounded-full hover:bg-blue-700 transition-colors"
+                      disabled={audioLoading || !callDetail.recordingUrl}
+                      className="flex items-center justify-center w-12 h-12 bg-blue-600 rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isPlaying ? (
+                      {audioLoading ? (
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : isPlaying ? (
                         <Pause className="w-5 h-5 text-white" />
                       ) : (
                         <Play className="w-5 h-5 text-white ml-0.5" />
@@ -576,11 +656,23 @@ export default function CallDetailPage() {
                     </button>
                     <button
                       onClick={handleDownloadRecording}
-                      className="text-gray-400 hover:text-white transition-colors"
+                      disabled={audioLoading}
+                      className="text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Download className="w-5 h-5" />
                     </button>
                   </div>
+
+                  {(!callDetail.recordingUrl ||
+                    callDetail.recordingStatus !== "completed") && (
+                    <div className="mt-4 text-center">
+                      <p className="text-sm text-gray-400">
+                        {!callDetail.recordingUrl
+                          ? "Recording not available"
+                          : `Recording status: ${callDetail.recordingStatus}`}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
