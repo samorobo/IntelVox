@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { formatDate } from "@/lib/format";
 import {
   Search,
   Plus,
@@ -34,6 +35,16 @@ interface Campaign {
   contactsReached?: string; // Stored as String in Prisma schema
   conversationRate?: string; // Using conversationRate as specified by user
   tenantId?: string;
+
+  //newly added field
+tenantName?: string;
+tenantEmail?: string;
+labelName?: string;
+agentType?: string
+agentStatus?: string;
+agentVoice?: string;
+agentConversations?: string;
+agentRetention?: string;
 }
 
 interface AIAgent {
@@ -496,10 +507,10 @@ useEffect(() => {
                         {campaign.aiAgent}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {campaign.startDate}
+                        {formatDate(campaign.startDate)}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {campaign.endDate}
+                        {formatDate(campaign.endtDate)}
                       </td>
                       <td className="py-4 px-6">
                         <span
@@ -617,7 +628,7 @@ useEffect(() => {
                       </h3>
                     </div>
                     <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {viewCampaign.startDate} - {viewCampaign.endDate}
+                      {formatDate(viewCampaign.startDate)} - {formatDate(viewCampaign.endDate)}
                     </p>
                   </div>
                   <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
