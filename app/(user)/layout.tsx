@@ -174,7 +174,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <body>
         <div className={darkMode ? "dark" : ""}>
           <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950">
-            <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+            <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-screen sticky top-0">
               <div className="p-6 border-b border-gray-200 dark:border-gray-800">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -224,7 +224,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
             </aside>
 
-            <div className="flex-1 flex flex-col">{children}</div>
+            <div className="flex-1 flex flex-col h-screen overflow-y-auto">
+              {children}
+            </div>
           </div>
         </div>
       </body>

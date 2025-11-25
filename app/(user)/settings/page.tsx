@@ -50,6 +50,7 @@ export default function UserSettingsPage() {
     handOffNumber: "",
     handOffStartTime: "",
     handOffEndTime: "",
+    isRecordingAllowed: false,
   });
 
   const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([]);
@@ -187,6 +188,7 @@ export default function UserSettingsPage() {
           handOffNumber: data.handOffNumber || "",
           handOffStartTime: normalizeTimeValue(data.handOffStartTime),
           handOffEndTime: normalizeTimeValue(data.handOffEndTime),
+          isRecordingAllowed: Boolean(data.isRecordingAllowed),
         });
       }
     } catch (error) {
@@ -228,7 +230,7 @@ export default function UserSettingsPage() {
 
   const handleHandConfigChange = (
     field: keyof typeof handConfig,
-    value: string
+    value: string | boolean
   ) => {
     setHandConfig((prev) => ({ ...prev, [field]: value }));
   };
@@ -239,6 +241,7 @@ export default function UserSettingsPage() {
     handOffNumber: handConfig.handOffNumber.trim(),
     handOffStartTime: handConfig.handOffStartTime,
     handOffEndTime: handConfig.handOffEndTime,
+    isRecordingAllowed: handConfig.isRecordingAllowed,
   });
 
   const handleSaveBasicDetails = async () => {
@@ -565,7 +568,7 @@ export default function UserSettingsPage() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
             Basic Details
           </h3>
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Company Name
@@ -610,7 +613,7 @@ export default function UserSettingsPage() {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                HandOff Number
+                Handoff Number
               </label>
               <input
                 type="text"
@@ -623,7 +626,7 @@ export default function UserSettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                HandOff Start Time
+                Handoff Start Time
               </label>
               <input
                 type="time"
@@ -647,7 +650,7 @@ export default function UserSettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                HandOff End Time
+                Handoff End Time
               </label>
               <input
                 type="time"
@@ -658,6 +661,36 @@ export default function UserSettingsPage() {
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Allow recording and transcription
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Enable this to record calls and generate transcriptions during human handoff.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                handleHandConfigChange(
+                  "isRecordingAllowed",
+                  !handConfig.isRecordingAllowed
+                )
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
+                handConfig.isRecordingAllowed
+                  ? "bg-blue-600"
+                  : "bg-gray-300 dark:bg-gray-600"
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                  handConfig.isRecordingAllowed ? "translate-x-5" : "translate-x-1"
+                }`}
+              />
+            </button>
           </div>
           <div className="flex justify-end">
             <button

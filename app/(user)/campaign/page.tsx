@@ -75,72 +75,108 @@ export default function CampaignsPage() {
   const itemsPerPage = 5;
 
   // Fetch campaigns, agents, and labels on component mount
+  // useEffect(() => {
+  //   const loadData = async () => {
+  //     await Promise.all([fetchAgents(), fetchLabels()]);
+  //     await fetchCampaigns();
+  //   };
+  //   loadData();
+  // }, []);
+
   useEffect(() => {
-    const loadData = async () => {
-      await Promise.all([fetchAgents(), fetchLabels()]);
-      await fetchCampaigns();
-    };
-    loadData();
-  }, []);
+  const loadData = async () => {
+    await fetchAgents();  // Wait for agents first
+    await fetchLabels();
+    await fetchCampaigns(); // Then fetch campaigns
+  };
+  loadData();
+}, []);
+
+
+useEffect(() => {
+  if (aiAgents.length > 0 && campaigns.length === 0) {
+    fetchCampaigns();
+  }
+}, [aiAgents]);
+
 
   const handleViewCampaign = async (id: string) => {
-    try {
-      setViewLoading(true);
-      const tenantId = getTenantIdOrThrow();
-      const response = await axiosClient.get(
-        `/campaign/${tenantId}/${id}`
-      );
-      let items = response.data;
+  try {
+    setViewLoading(true);
+    const tenantId = getTenantIdOrThrow();
+    const response = await axiosClient.get(`/campaign/${tenantId}/${id}`);
 
-      // Handle backend possibly returning a JSON string instead of an array
-      if (typeof items === "string") {
-        try {
-          items = JSON.parse(items);
-        } catch (e) {
-          console.error("Failed to parse campaign details JSON:", e);
-          toast.error("Failed to load campaign details");
-          return;
-        }
+    // Backend may return:
+    // - a plain object
+    // - { data: object }
+    // - a JSON string of either of the above
+    let payload: any = response.data;
+
+    if (typeof payload === "string") {
+      try {
+        payload = JSON.parse(payload);
+      } catch (e) {
+        console.error("Failed to parse campaign details JSON:", e);
+        toast.error("Failed to load campaign details");
+        return;
       }
+    }
 
-      if (!Array.isArray(items) || items.length === 0) {
+    let data: any = payload?.data ?? payload;
+
+    // If backend still returns an array, pick matching id or first
+    if (Array.isArray(data)) {
+      if (data.length === 0) {
         toast.error("Campaign details not found");
         return;
       }
-
-      // Prefer the campaign that matches the requested id, fallback to first item
-      const data =
-        items.find((item: any) => item.id === id) ?? items[0];
-
-      const formatted: Campaign = {
-        id: data.id || data._id,
-        name: data.name,
-        type: data.type,
-        agentId: data.agentId,
-        aiAgent: data.agent?.name || "",
-        startDate: data.startDate,
-        endDate: data.endDate,
-        status: data.status,
-        description: data.description,
-        labelId: data.labelId,
-        totalCalls: data.totalCalls ?? "0",
-        contactsReached: data.contactsReached ?? "0",
-        conversationRate: data.conversationRate ?? "0%",
-        tenantId: data.tenantId,
-      };
-
-      setViewCampaign(formatted);
-    } catch (error: any) {
-      console.error("Error fetching campaign details:", error);
-      toast.error(
-        error?.response?.data?.error ||
-          error?.response?.data?.message ||
-          "Failed to load campaign details"
-      );
-    } finally {
-      setViewLoading(false);
+      data = data.find((item: any) => item.id === id) ?? data[0];
     }
-  };
+
+    if (!data || typeof data !== "object") {
+      toast.error("Campaign details not found");
+      return;
+    }
+
+    const formatted: Campaign = {
+      id: data.id || data._id,
+      name: data.name,
+      type: data.type,
+      agentId: data.agentId,
+      aiAgent: data.agent?.name || "",
+      startDate: data.startDate,
+      endDate: data.endDate,
+      status: data.status,
+      description: data.description,
+      labelId: data.labelId,
+      totalCalls: data.totalCalls ?? "0",
+      contactsReached: data.contactsReached ?? "0",
+      conversationRate: data.conversationRate ?? "0%",
+      tenantId: data.tenantId,
+
+      // New mapped fields from your sample response
+      tenantName: data.tenant?.name,
+      tenantEmail: data.tenant?.email,
+      labelName: data.label?.name,
+      agentType: data.agent?.type,
+      agentStatus: data.agent?.status,
+      agentVoice: data.agent?.voice,
+      agentConversations: data.agent?.conversations,
+      agentRetention: data.agent?.retention,
+    };
+
+    setViewCampaign(formatted);
+  } catch (error: any) {
+    console.error("Error fetching campaign details:", error);
+    toast.error(
+      error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to load campaign details"
+    );
+  } finally {
+    setViewLoading(false);
+  }
+};
 
   const fetchCampaigns = async () => {
     try {
@@ -155,7 +191,8 @@ export default function CampaignsPage() {
           name: campaign.name,
           type: campaign.type,
           agentId: campaign.agentId,
-          aiAgent: agent?.name || "",
+          aiAgent: campaign.agent?.name || "N/A",
+
           startDate: campaign.startDate,
           endDate: campaign.endDate,
           status: campaign.status,
@@ -456,7 +493,7 @@ export default function CampaignsPage() {
                         </span>
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {campaign.aiAgent || "N/A"}
+                        {campaign.aiAgent}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
                         {campaign.startDate}
