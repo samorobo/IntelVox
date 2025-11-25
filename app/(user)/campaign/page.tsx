@@ -510,7 +510,7 @@ useEffect(() => {
                         {formatDate(campaign.startDate)}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                        {formatDate(campaign.endtDate)}
+                        {formatDate(campaign.endDate)}
                       </td>
                       <td className="py-4 px-6">
                         <span
