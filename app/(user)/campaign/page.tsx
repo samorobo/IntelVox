@@ -70,6 +70,7 @@ export default function CampaignsPage() {
     label: "",
   });
   const [formErrors, setFormErrors] = useState<any>({});
+  const [viewLoading, setViewLoading] = useState(false);
 
   const itemsPerPage = 5;
 
@@ -82,10 +83,69 @@ export default function CampaignsPage() {
     loadData();
   }, []);
 
+  const handleViewCampaign = async (id: string) => {
+    try {
+      setViewLoading(true);
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(
+        `/campaign/${tenantId}/${id}`
+      );
+      let items = response.data;
+
+      // Handle backend possibly returning a JSON string instead of an array
+      if (typeof items === "string") {
+        try {
+          items = JSON.parse(items);
+        } catch (e) {
+          console.error("Failed to parse campaign details JSON:", e);
+          toast.error("Failed to load campaign details");
+          return;
+        }
+      }
+
+      if (!Array.isArray(items) || items.length === 0) {
+        toast.error("Campaign details not found");
+        return;
+      }
+
+      // Prefer the campaign that matches the requested id, fallback to first item
+      const data =
+        items.find((item: any) => item.id === id) ?? items[0];
+
+      const formatted: Campaign = {
+        id: data.id || data._id,
+        name: data.name,
+        type: data.type,
+        agentId: data.agentId,
+        aiAgent: data.agent?.name || "",
+        startDate: data.startDate,
+        endDate: data.endDate,
+        status: data.status,
+        description: data.description,
+        labelId: data.labelId,
+        totalCalls: data.totalCalls ?? "0",
+        contactsReached: data.contactsReached ?? "0",
+        conversationRate: data.conversationRate ?? "0%",
+        tenantId: data.tenantId,
+      };
+
+      setViewCampaign(formatted);
+    } catch (error: any) {
+      console.error("Error fetching campaign details:", error);
+      toast.error(
+        error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          "Failed to load campaign details"
+      );
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
-      const tenantId = getTenantIdOrThrow();
+      const  tenantId = getTenantIdOrThrow();
       const response = await axiosClient.get(`/campaign/${tenantId}`);
       // Map backend response to match our interface
       const formattedCampaigns = response.data.map((campaign: any) => {
@@ -353,7 +413,7 @@ export default function CampaignsPage() {
                     End Date
                   </th>
                   <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                    Status
+                    Call Type
                   </th>
                   <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
                     Actions
@@ -410,14 +470,15 @@ export default function CampaignsPage() {
                             campaign.status
                           )}`}
                         >
-                          ● {campaign.status}
+                          ● {campaign.type}
                         </span>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setViewCampaign(campaign)}
-                            className="p-1.5 text-gray-600 hover:text-blue-600"
+                            onClick={() => handleViewCampaign(campaign.id)}
+                            disabled={viewLoading}
+                            className="p-1.5 text-gray-600 hover:text-blue-600 disabled:opacity-50"
                           >
                             <Eye className="w-4 h-4" />
                           </button>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Eye, Calendar, Loader2, X } from "lucide-react";
+import axiosClient from "@/lib/axiosClient";
 
 interface Handoff {
   id: string;
@@ -15,14 +16,7 @@ interface Handoff {
 }
 
 export default function HumanHandoffPage() {
-  const [handoffs, setHandoffs] = useState<Handoff[]>([
-    { id: "1", contactName: "Priya Nair", phoneNumber: "+919876543210", note: "Requested callback at 5 PM regarding policy renewal", callDate: "2025-11-11", callTime: "17:00", duration: "15 min", status: "Upcoming" },
-    { id: "2", contactName: "James Wilson", phoneNumber: "+14155552671", note: "Technical support needed for API integration", callDate: "2025-11-10", callTime: "14:30", duration: "30 min", status: "Completed" },
-    { id: "3", contactName: "Sarah Chen", phoneNumber: "+16505551234", note: "Follow-up on pricing discussion", callDate: "2025-11-09", callTime: "10:00", duration: "20 min", status: "Missed" },
-    { id: "4", contactName: "Mohammed Ahmed", phoneNumber: "+971501234567", note: "Demo request for enterprise features", callDate: "2025-11-12", callTime: "11:00", duration: "45 min", status: "Upcoming" },
-    { id: "5", contactName: "Emily Rodriguez", phoneNumber: "+34612345678", note: "Contract renewal discussion", callDate: "2025-11-11", callTime: "16:00", duration: "25 min", status: "Upcoming" },
-  ]);
-
+  const [handoffs, setHandoffs] = useState<Handoff[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"All" | "Upcoming" | "Completed" | "Missed">("All");
   const [currentPage, setCurrentPage] = useState(1);
@@ -31,8 +25,62 @@ export default function HumanHandoffPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({ contactName: "", phoneNumber: "", note: "", callDate: "", callTime: "", duration: "" });
   const [formErrors, setFormErrors] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const itemsPerPage = 5;
+
+  useEffect(() => {
+    const fetchHandoffs = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const tenantId =
+          typeof window !== "undefined" ? localStorage.getItem("tenantId") : null;
+
+        if (!tenantId) {
+          setError("Tenant information not found. Please sign in again.");
+          setLoading(false);
+          return;
+        }
+
+        const response = await axiosClient.get(`/handoff/${tenantId}/`);
+        const items = response.data?.data ?? [];
+
+        const mapped: Handoff[] = items.map((item: any, index: number) => {
+          const rawStatus = (item.status || "completed") as string;
+          let normalizedStatus: Handoff["status"] = "Completed";
+          if (rawStatus.toLowerCase() === "upcoming") normalizedStatus = "Upcoming";
+          else if (rawStatus.toLowerCase() === "missed") normalizedStatus = "Missed";
+
+          return {
+            id: item.id?.toString() ?? `${index}`,
+            contactName: item.contactName,
+            phoneNumber: item.phoneNumber,
+            note: item.note,
+            callDate: item.callDate,
+            callTime: item.callTime,
+            duration: item.duration,
+            status: normalizedStatus,
+          };
+        });
+
+        setHandoffs(mapped);
+      } catch (err: any) {
+        console.error("Error fetching handoffs:", err);
+        setError(
+          err?.response?.data?.error ||
+            err?.response?.data?.message ||
+            "Failed to load handoffs. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHandoffs();
+  }, []);
 
   const filteredHandoffs = handoffs.filter(h => {
     const matchesSearch = h.contactName.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -112,7 +160,11 @@ export default function HumanHandoffPage() {
               </div>
             </div>
           </div>
-
+          {error && (
+            <div className="px-6 pt-2 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
           <table className="w-full table-fixed">
             <colgroup>
               <col className="w-[15%]" />
@@ -137,29 +189,46 @@ export default function HumanHandoffPage() {
               </tr>
             </thead>
             <tbody>
-              {currentHandoffs.map(handoff => (
-                <tr key={handoff.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">{handoff.contactName}</td>
-                  <td className="py-4 px-6 text-sm text-blue-600 dark:text-blue-400 whitespace-nowrap">{handoff.phoneNumber}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 group relative">
-                    <div className="truncate cursor-help">{handoff.note}</div>
-                    <div className="invisible group-hover:visible absolute left-0 top-full mt-2 z-50 w-80 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl pointer-events-none">
-                      {handoff.note}
-                      <div className="absolute -top-1 left-6 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      <span>Loading handoffs...</span>
                     </div>
                   </td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{handoff.callDate}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{handoff.callTime}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{handoff.duration}</td>
-                  <td className="py-4 px-6 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(handoff.status)}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                      {handoff.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6"><button onClick={() => setViewHandoff(handoff)} className="p-1.5 text-gray-600 hover:text-blue-600"><Eye className="w-4 h-4" /></button></td>
                 </tr>
-              ))}
+              ) : currentHandoffs.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                    No handoffs found.
+                  </td>
+                </tr>
+              ) : (
+                currentHandoffs.map(handoff => (
+                  <tr key={handoff.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">{handoff.contactName}</td>
+                    <td className="py-4 px-6 text-sm text-blue-600 dark:text-blue-400 whitespace-nowrap">{handoff.phoneNumber}</td>
+                    <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 group relative">
+                      <div className="truncate cursor-help">{handoff.note}</div>
+                      <div className="invisible group-hover:visible absolute left-0 top-full mt-2 z-50 w-80 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl pointer-events-none">
+                        {handoff.note}
+                        <div className="absolute -top-1 left-6 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{handoff.callDate}</td>
+                    <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{handoff.callTime}</td>
+                    <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{handoff.duration}</td>
+                    <td className="py-4 px-6 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(handoff.status)}`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                        {handoff.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6"><button onClick={() => setViewHandoff(handoff)} className="p-1.5 text-gray-600 hover:text-blue-600"><Eye className="w-4 h-4" /></button></td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
 

@@ -17,6 +17,8 @@ import {
   Contact,
   UserPlus,
 } from "lucide-react";
+import axiosClient from "@/lib/axiosClient";
+import { getTenantId } from "@/lib/utils";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -65,6 +67,10 @@ const navItems = [
 ];
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [darkMode, setDarkMode] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ name: string; email: string }>({
+    name: "",
+    email: "",
+  });
 
   useEffect(() => {
     // Only access localStorage on client side
@@ -74,6 +80,87 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         setDarkMode(true);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const applyLocalFallback = () => {
+        if (typeof window === "undefined") return;
+        const storedName = localStorage.getItem("tenantName") || "";
+        const storedEmail = localStorage.getItem("tenantEmail") || "";
+        if (storedName || storedEmail) {
+          setUserInfo({
+            name: storedName,
+            email: storedEmail,
+          });
+        }
+      };
+
+      const fetchFromTenantDetails = async (tenantId: string) => {
+        try {
+          const response = await axiosClient.get(`/tenant/details-config/${tenantId}`);
+          const data = response.data?.data || response.data;
+          if (data) {
+            const name = data.name?.trim() || localStorage.getItem("tenantName") || "";
+            const email = data.email || localStorage.getItem("tenantEmail") || "";
+            if (typeof window !== "undefined") {
+              if (name) localStorage.setItem("tenantName", name);
+              if (email) localStorage.setItem("tenantEmail", email);
+            }
+            setUserInfo({
+              name,
+              email,
+            });
+            return true;
+          }
+        } catch (err) {
+          console.error("Failed to fetch tenant details:", err);
+        }
+        return false;
+      };
+
+      try {
+        const tenantId = getTenantId();
+        if (!tenantId) {
+          applyLocalFallback();
+          return;
+        }
+
+        const response = await axiosClient.get(`/otp/verify?tenantId=${tenantId}`);
+        const tenantData =
+          response.data?.data?.tenant ||
+          response.data?.tenant ||
+          response.data?.data;
+
+        if (tenantData) {
+          const name = tenantData.name?.trim() || localStorage.getItem("tenantName") || "";
+          const email = tenantData.email || localStorage.getItem("tenantEmail") || "";
+
+          if (typeof window !== "undefined") {
+            if (name) localStorage.setItem("tenantName", name);
+            if (email) localStorage.setItem("tenantEmail", email);
+          }
+
+          setUserInfo({
+            name,
+            email,
+          });
+        } else {
+          const fetched = await fetchFromTenantDetails(tenantId);
+          if (!fetched) {
+            applyLocalFallback();
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch user profile:", error);
+        const tenantId = getTenantId();
+        if (!(tenantId && (await fetchFromTenantDetails(tenantId)))) {
+          applyLocalFallback();
+        }
+      }
+    };
+
+    fetchUserProfile();
   }, []);
 
   const toggleTheme = () => {
@@ -123,10 +210,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      John Doe
+                      {userInfo.name || "User"}
                     </span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                      johndoe@email.com
+                      {userInfo.email || "No email"}
                     </span>
                   </div>
                 </Link>

@@ -115,6 +115,17 @@ export default function UserLoginFlow() {
 
         localStorage.setItem("tenantId", tenantId);
 
+        const tenantData = innerData?.tenant || apiData?.tenant;
+        const tenantName = tenantData?.name;
+        if (tenantName) {
+          localStorage.setItem("tenantName", tenantName.trim());
+        }
+
+        const tenantEmail = tenantData?.email || email;
+        if (tenantEmail) {
+          localStorage.setItem("tenantEmail", tenantEmail);
+        }
+
         setError("");
         router.push("/profile");
       }

@@ -179,10 +179,26 @@ export default function UserSignupFlow() {
 
       if (response.status === 200 || response.status === 201) {
         // Save tenant ID to localStorage
-        const tenantId = response.data?.id || response.data?.tenantId || response.data?.tenant?.id;
+        const tenantData = response.data?.tenant || response.data;
+        const tenantId =
+          tenantData?.tenantId ||
+          tenantData?.id ||
+          response.data?.tenantId ||
+          response.data?.id;
         if (tenantId) {
           localStorage.setItem("tenantId", tenantId);
         }
+
+        const tenantName = tenantData?.name || profile.name;
+        if (tenantName) {
+          localStorage.setItem("tenantName", tenantName.trim());
+        }
+
+        const tenantEmail = tenantData?.email || email;
+        if (tenantEmail) {
+          localStorage.setItem("tenantEmail", tenantEmail);
+        }
+
         router.push("/profile");
       }
     } catch (err: any) {

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Camera, Edit, Trash2, Plus, X, Eye, EyeOff } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import axiosClient from "@/lib/axiosClient";
-
+import { getTenantId, getTenantIdOrThrow } from "@/lib/utils";
 interface LLMConfig {
   id: string;
   provider: string;
@@ -34,29 +34,22 @@ interface Notification {
   timestamp: number;
 }
 
-import { getTenantIdOrThrow } from "@/lib/utils";
-
 export default function UserSettingsPage() {
   const [user, setUser] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
+    name: "",
+    email: "",
     avatarUrl: "",
   });
 
   const [basicDetails, setBasicDetails] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+1234567890",
-    company: "Tech Corp",
-    location: "New York, USA",
-    timezone: "UTC-5",
+    name: "",
+    email: "",
   });
 
   const [handConfig, setHandConfig] = useState({
-    handName: "Default Hand",
-    handType: "Voice Assistant",
-    language: "English",
-    greeting: "Hello! How can I help you today?",
+    handOffNumber: "",
+    handOffStartTime: "",
+    handOffEndTime: "",
   });
 
   const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([]);
@@ -101,6 +94,30 @@ export default function UserSettingsPage() {
   });
 
   useEffect(() => {
+    const fetchTenantProfile = async () => {
+      try {
+        const response = await axiosClient.get("/otp/verify");
+        const tenantData = response.data?.data?.tenant;
+        if (tenantData) {
+          const normalizedName = tenantData.name?.trim() || "";
+          setUser((prev) => ({
+            ...prev,
+            name: normalizedName,
+            email: tenantData.email || "",
+          }));
+          setBasicDetails((prev) => ({
+            ...prev,
+            name: normalizedName || prev.name,
+            email: tenantData.email || prev.email,
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching tenant profile:", error);
+      }
+    };
+
+    fetchTenantProfile();
+    fetchTenantDetails();
     fetchLLMConfigs();
     fetchTwilioConfigs();
   }, []);
@@ -135,6 +152,48 @@ export default function UserSettingsPage() {
     }
   };
 
+  const normalizeTimeValue = (value?: string | null) => {
+    if (!value) return "";
+    if (value.length >= 5) {
+      return value.slice(0, 5);
+    }
+    return value;
+  };
+
+  const fetchTenantDetails = async () => {
+    try {
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/tenant/details-config/${tenantId}`);
+      const data = response.data?.data || response.data;
+      if (data) {
+        setBasicDetails({
+          name: data.name || "",
+          email: data.email || "",
+        });
+        setUser((prev) => ({
+          ...prev,
+          name: data.name || prev.name,
+          email: data.email || prev.email,
+        }));
+        if (typeof window !== "undefined") {
+          if (data.name) {
+            localStorage.setItem("tenantName", data.name.trim());
+          }
+          if (data.email) {
+            localStorage.setItem("tenantEmail", data.email);
+          }
+        }
+        setHandConfig({
+          handOffNumber: data.handOffNumber || "",
+          handOffStartTime: normalizeTimeValue(data.handOffStartTime),
+          handOffEndTime: normalizeTimeValue(data.handOffEndTime),
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching tenant details:", error);
+    }
+  };
+
   const addNotification = (
     message: string,
     type: "success" | "error" | "info"
@@ -160,21 +219,81 @@ export default function UserSettingsPage() {
     );
   };
 
-  const handleBasicDetailsChange = (field: string, value: string) => {
+  const handleBasicDetailsChange = (
+    field: keyof typeof basicDetails,
+    value: string
+  ) => {
     setBasicDetails((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleHandConfigChange = (field: string, value: string) => {
+  const handleHandConfigChange = (
+    field: keyof typeof handConfig,
+    value: string
+  ) => {
     setHandConfig((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSaveBasicDetails = () => {
-    setUser({ ...user, name: basicDetails.name, email: basicDetails.email });
-    addNotification("Basic details updated successfully", "success");
+  const buildDetailsPayload = () => ({
+    name: basicDetails.name.trim(),
+    email: basicDetails.email.trim(),
+    handOffNumber: handConfig.handOffNumber.trim(),
+    handOffStartTime: handConfig.handOffStartTime,
+    handOffEndTime: handConfig.handOffEndTime,
+  });
+
+  const handleSaveBasicDetails = async () => {
+    if (!basicDetails.name.trim() || !basicDetails.email.trim()) {
+      addNotification("Please provide both company name and email.", "error");
+      return;
+    }
+
+    try {
+      const tenantId = getTenantIdOrThrow();
+      await axiosClient.put(
+        `/tenant/details-config/${tenantId}`,
+        buildDetailsPayload()
+      );
+      setUser((prev) => ({
+        ...prev,
+        name: basicDetails.name,
+        email: basicDetails.email,
+      }));
+      addNotification("Basic details updated successfully", "success");
+    } catch (error: any) {
+      console.error("Error updating basic details:", error);
+      const message =
+        error.response?.data?.message || "Failed to update basic details";
+      addNotification(message, "error");
+    }
   };
 
-  const handleSaveHandConfig = () => {
-    addNotification("Hand configuration updated successfully", "success");
+  const handleSaveHandConfig = async () => {
+    if (
+      !handConfig.handOffNumber.trim() ||
+      !handConfig.handOffStartTime ||
+      !handConfig.handOffEndTime
+    ) {
+      addNotification(
+        "Please provide handoff number and both start/end times.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      const tenantId = getTenantIdOrThrow();
+      await axiosClient.put(
+        `/tenant/details-config/${tenantId}`,
+        buildDetailsPayload()
+      );
+      addNotification("Hand configuration updated successfully", "success");
+    } catch (error: any) {
+      console.error("Error updating handoff configuration:", error);
+      const message =
+        error.response?.data?.message ||
+        "Failed to update handoff configuration";
+      addNotification(message, "error");
+    }
   };
 
   const handleAvatarChange = () => {
@@ -428,12 +547,12 @@ export default function UserSettingsPage() {
                   .join("")
                   .toUpperCase()}
               </div>
-              <button
+              {/* <button
                 onClick={handleAvatarChange}
                 className="absolute bottom-0 right-0 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-colors"
               >
                 <Camera className="w-4 h-4" />
-              </button>
+              </button> */}
             </div>
             <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
               {user.name}
@@ -449,7 +568,7 @@ export default function UserSettingsPage() {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Name
+                Company Name
               </label>
               <input
                 type="text"
@@ -473,58 +592,6 @@ export default function UserSettingsPage() {
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Phone
-              </label>
-              <input
-                type="tel"
-                value={basicDetails.phone}
-                onChange={(e) =>
-                  handleBasicDetailsChange("phone", e.target.value)
-                }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Company
-              </label>
-              <input
-                type="text"
-                value={basicDetails.company}
-                onChange={(e) =>
-                  handleBasicDetailsChange("company", e.target.value)
-                }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Location
-              </label>
-              <input
-                type="text"
-                value={basicDetails.location}
-                onChange={(e) =>
-                  handleBasicDetailsChange("location", e.target.value)
-                }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Timezone
-              </label>
-              <input
-                type="text"
-                value={basicDetails.timezone}
-                onChange={(e) =>
-                  handleBasicDetailsChange("timezone", e.target.value)
-                }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
           </div>
           <div className="flex justify-end">
             <button
@@ -543,26 +610,26 @@ export default function UserSettingsPage() {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Hand Name
+                HandOff Number
               </label>
               <input
                 type="text"
-                value={handConfig.handName}
+                value={handConfig.handOffNumber}
                 onChange={(e) =>
-                  handleHandConfigChange("handName", e.target.value)
+                  handleHandConfigChange("handOffNumber", e.target.value)
                 }
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Hand Type
+                HandOff Start Time
               </label>
               <input
-                type="text"
-                value={handConfig.handType}
+                type="time"
+                value={handConfig.handOffStartTime}
                 onChange={(e) =>
-                  handleHandConfigChange("handType", e.target.value)
+                  handleHandConfigChange("handOffStartTime", e.target.value)
                 }
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -573,22 +640,20 @@ export default function UserSettingsPage() {
               </label>
               <input
                 type="text"
-                value={handConfig.language}
-                onChange={(e) =>
-                  handleHandConfigChange("language", e.target.value)
-                }
+                value="English"
+                disabled
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Greeting Message
+                HandOff End Time
               </label>
               <input
-                type="text"
-                value={handConfig.greeting}
+                type="time"
+                value={handConfig.handOffEndTime}
                 onChange={(e) =>
-                  handleHandConfigChange("greeting", e.target.value)
+                  handleHandConfigChange("handOffEndTime", e.target.value)
                 }
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
