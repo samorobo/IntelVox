@@ -1,4 +1,4 @@
-name: Deploy Frontend (Direct Upload + Cleanup + Health Check)
+name: Deploy Frontend (Fast Git Clone)
 
 on:
   push:
@@ -9,138 +9,75 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Validate build
-        run: |
-          npm ci
-          npm run build
-
-      - name: Test SSH connection
+      - name: Deploy on VPS (Direct Git Clone)
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_SHA: ${{ github.sha }}
+          REPO_NAME: ${{ github.repository }}
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          timeout: 60s
+          command_timeout: 600s
+          envs: GITHUB_TOKEN,GITHUB_SHA,REPO_NAME
           script: |
-            echo "🔐 SSH connection test successful on $(hostname)"
-            uptime
-
-      - name: Upload source code to VPS (attempt 1)
-        id: upload1
-        continue-on-error: true
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "."
-          target: "/var/www/intelvox_frontend_temp"
-          overwrite: true
-          debug: true
-          timeout: 180s
-          command_timeout: 180s
-
-      - name: Retry upload if failed
-        if: steps.upload1.outcome == 'failure'
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "."
-          target: "/var/www/intelvox_frontend_temp"
-          overwrite: true
-          timeout: 180s
-          command_timeout: 180s
-
-      - name: Deploy on VPS
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            echo "🚀 Starting frontend deployment..."
-            mkdir -p /var/www
+            set -e
+            echo "🚀 Fast frontend deployment starting..."
             
-            # Check if upload was successful
-            if [ ! -d "/var/www/intelvox_frontend_temp" ]; then
-              echo "❌ Upload failed - temp directory not found"
-              exit 1
-            fi
+            # Clean up any failed previous deployments
+            rm -rf /var/www/developmentsite.space/intelvox_frontend_new 2>/dev/null || true
             
-            if [ -d "/var/www/intelvox_frontend" ]; then
-              echo "🧹 Backing up old version..."
-              rm -rf /var/www/intelvox_frontend_old
-              mv /var/www/intelvox_frontend /var/www/intelvox_frontend_old
-            fi
+            # Clone fresh code with token authentication
+            mkdir -p /var/www/developmentsite.space
+            cd /var/www/developmentsite.space
+            echo "Cloning repository..."
+            git clone https://x-access-token:$GITHUB_TOKEN@github.com/$REPO_NAME.git intelvox_frontend_new
+            cd intelvox_frontend_new
+            git checkout $GITHUB_SHA
+            echo "✅ Code cloned successfully"
             
-            echo "📦 Moving new version..."
-            mv /var/www/intelvox_frontend_temp /var/www/intelvox_frontend
-            cd /var/www/intelvox_frontend
-            
-            echo "🔹 Installing dependencies..."
+            # Install dependencies and build
+            echo "Installing dependencies..."
             npm ci
             
-            echo "🔹 Installing PM2 globally..."
-            npm install -g pm2 || true
+            # Create environment file for Next.js
+            cat > .env.local <<EOF
+            NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+            EOF
             
-            echo "🔹 Stopping processes on port 3000..."
-            sudo lsof -ti:3000 | xargs -r sudo kill -9 2>/dev/null || true
+            echo "Building application..."
+            npm run build
+            echo "✅ Build completed"
             
-            echo "🔹 Cleaning PM2 processes..."
-            pm2 delete all 2>/dev/null || true
-            pm2 kill 2>/dev/null || true
-            sleep 3
+            # Atomic swap
+            if [ -d "/var/www/developmentsite.space/intelvox_frontend" ]; then
+              rm -rf /var/www/developmentsite.space/intelvox_frontend_old 2>/dev/null || true
+              mv /var/www/developmentsite.space/intelvox_frontend /var/www/developmentsite.space/intelvox_frontend_old
+            fi
+            mv /var/www/developmentsite.space/intelvox_frontend_new /var/www/developmentsite.space/intelvox_frontend
             
-            echo "🔹 Starting application..."
-            pm2 start npm --name "intelvox_frontend" --instances 1 -- start
+            # Restart PM2
+            pm2 stop intelvox_frontend 2>/dev/null || true
+            pm2 delete intelvox_frontend 2>/dev/null || true
+            pm2 start npm --name "intelvox_frontend" --cwd /var/www/developmentsite.space/intelvox_frontend -- start
             pm2 save
             
-            sleep 8
+            # Health check
+            echo "⏳ Starting health check..."
+            sleep 3
             
-            echo "🔍 Checking process status..."
-            pm2 status
-            
-            RETRIES=0
-            MAX_RETRIES=15
-            
-            while [ $RETRIES -lt $MAX_RETRIES ]; do
-              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
-              if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "404" ]; then
-                echo "✅ Health check passed! (HTTP $HTTP_CODE)"
-                rm -rf /var/www/intelvox_frontend_old 2>/dev/null || true
-                echo "🎉 Deployment successful!"
+            for i in {1..5}; do
+              if curl -sf http://localhost:3000 >/dev/null; then
+                echo "✅ Deployment successful in $(date)!"
                 exit 0
               fi
-              echo "⏳ Waiting... (attempt $((RETRIES + 1))/$MAX_RETRIES, HTTP $HTTP_CODE)"
-              RETRIES=$((RETRIES + 1))
-              sleep 2
+              echo "Waiting... ($i/5)"
+              sleep 4
             done
             
-            echo "❌ Health check failed after $MAX_RETRIES attempts"
-            echo "📋 Application logs:"
-            pm2 logs intelvox_frontend --lines 30 --nostream || true
-            
-            if [ -d "/var/www/intelvox_frontend_old" ]; then
-              echo "⏮️  Rolling back to previous version..."
-              pm2 delete intelvox_frontend 2>/dev/null || true
-              rm -rf /var/www/intelvox_frontend
-              mv /var/www/intelvox_frontend_old /var/www/intelvox_frontend
-              cd /var/www/intelvox_frontend
-              pm2 start npm --name "intelvox_frontend" -- start
-              pm2 save
-              echo "✅ Rollback complete"
-            fi
+            echo "❌ Health check failed"
+            pm2 logs intelvox_frontend --lines 15
             exit 1
