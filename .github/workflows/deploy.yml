@@ -9,6 +9,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Test SSH Connection
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 30s
+          debug: true
+          script: |
+            echo "🔐 SSH connection test successful"
+            whoami
+            pwd
+            echo "Server: $(hostname)"
+            echo "Date: $(date)"
+
       - name: Deploy on VPS (Direct Git Clone)
         uses: appleboy/ssh-action@v1.2.0
         env:
