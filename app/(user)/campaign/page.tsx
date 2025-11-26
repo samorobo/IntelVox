@@ -599,14 +599,16 @@ export default function CampaignsPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleStartCall(viewCampaign.id)}
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
-                    title="Start outbound call"
-                  >
-                    <Phone className="w-4 h-4" />
-                  </button>
+                  {viewCampaign.type === "Outbound" && (
+    <button
+      type="button"
+      onClick={() => handleStartCall(viewCampaign.id)}
+      className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+      title="Start outbound call"
+    >
+      <Phone className="w-4 h-4" />
+    </button>
+  )}
                   <button
                     onClick={() => setViewCampaign(null)}
                     className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"

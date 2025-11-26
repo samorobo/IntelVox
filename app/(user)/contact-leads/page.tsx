@@ -1,17 +1,31 @@
 // app/contacts/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Search, Download, Trash2, Plus, Upload, X, Loader2, FileDown, Users } from "lucide-react";
 import axiosClient from "@/lib/axiosClient";
 import axios from "axios";
-import { PhoneInput } from "react-international-phone";
+import dynamic from 'next/dynamic';
 import "react-international-phone/style.css";
 import { getTenantId, getTenantIdOrThrow } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+// Dynamically import PhoneInput with SSR disabled
+const PhoneInput = dynamic(
+  () => import('react-international-phone').then(mod => mod.PhoneInput),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+        Loading phone input...
+      </div>
+    )
+  }
+);
+
 const LABEL_API_BASE_URL = "https://backend.developmentsite.space";
+
 
 interface Lead {
   id: string;
@@ -25,7 +39,7 @@ interface Lead {
   tenantId?: string;
   createdAt?: string;
   updatedAt?: string;
-  label?: string;
+  label?: string | { id: string; name: string };
   labelId?: string;
 }
 
@@ -185,11 +199,19 @@ export default function ContactLeadsPage() {
   };
 
   const filteredLeads = leads.filter(
-      (lead) =>
-          lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          lead.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          lead.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          lead.label?.toLowerCase().includes(searchTerm.toLowerCase())
+      (lead) => {
+        const searchTermLower = searchTerm.toLowerCase();
+        const labelText = typeof lead.label === 'string' 
+          ? lead.label 
+          : lead.label?.name || '';
+          
+        return (
+          lead.name?.toLowerCase().includes(searchTermLower) ||
+          lead.number?.toLowerCase().includes(searchTermLower) ||
+          lead.status?.toLowerCase().includes(searchTermLower) ||
+          labelText.toLowerCase().includes(searchTermLower)
+        );
+      }
   );
 
   const getStatusColor = (status: Lead["status"]) => {
@@ -228,14 +250,13 @@ export default function ContactLeadsPage() {
 
   const handleExport = () => {
     try {
-      const headers = ["Name", "Number", "Label", "Status", "Created Date"];
+      const headers = ["Name", "Number", "Label", "Created Date"];
       const csvRows = [
         headers.join(","),
         ...leads.map(lead => [
           `"${lead.name}"`,
           `"${lead.number}"`,
           `"${lead.label || 'N/A'}"`,
-          `"${lead.status || 'on_hold'}"`,
           `"${lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : 'N/A'}"`
         ].join(","))
       ];
@@ -491,9 +512,6 @@ export default function ContactLeadsPage() {
                         Label
                       </th>
                       <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Status
-                      </th>
-                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
                         Created
                       </th>
                       <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -514,16 +532,11 @@ export default function ContactLeadsPage() {
                             {lead.number}
                           </td>
                           <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                            {lead.label || "No Label"}
-                          </td>
-                          <td className="py-4 px-6">
-                        <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusColor(
-                                lead.status
-                            )}`}
-                        >
-                          {lead.status?.replace("_", " ") || "on hold"}
-                        </span>
+                            {lead.label 
+                              ? typeof lead.label === 'object' 
+                                ? lead.label.name 
+                                : lead.label 
+                              : 'No Label'}
                           </td>
                           <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
                             {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : "N/A"}
@@ -618,7 +631,7 @@ export default function ContactLeadsPage() {
                         Phone Number <span className="text-red-500">*</span>
                       </label>
                       <PhoneInput
-                          defaultCountry="ng"
+                          defaultCountry="gb"
                           value={addContactFormData.number}
                           onChange={(phone) => handleAddContactInputChange("number", phone)}
                           disabled={submitting}

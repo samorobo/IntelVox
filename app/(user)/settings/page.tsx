@@ -149,6 +149,7 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
 
     fetchTenantProfile();
     fetchTenantDetails();
+    fetchHandOffConfig();
     fetchLLMConfigs();
     fetchTwilioConfigs();
     fetchWebhookConfig();
@@ -238,20 +239,7 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
       const response = await axiosClient.get(`/tenant/details-config/${tenantId}`);
       const data = response.data?.data || response.data;
       if (data) {
-        const handOffNumberValue =
-          data.handOffNumber ?? data.handoffNumber ?? data.handoff_number ?? "";
-        const handOffStartTimeValue =
-          data.handOffStartTime ??
-          data.handoffStartTime ??
-          data.handoff_start_time ??
-          "";
-        const handOffEndTimeValue =
-          data.handOffEndTime ??
-          data.handoffEndTime ??
-          data.handoff_end_time ??
-          "";
-        const isRecordingAllowedValue =
-          data.isRecordingAllowed ?? data.is_recording_allowed ?? false;
+        console.log("[TenantDetails] raw response:", data);
 
         setBasicDetails({
           name: data.name || "",
@@ -270,15 +258,67 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
             localStorage.setItem("tenantEmail", data.email);
           }
         }
-        setHandConfig({
-          handOffNumber: handOffNumberValue || "",
-          handOffStartTime: normalizeTimeValue(handOffStartTimeValue),
-          handOffEndTime: normalizeTimeValue(handOffEndTimeValue),
-          isRecordingAllowed: Boolean(isRecordingAllowedValue),
-        });
       }
     } catch (error) {
       console.error("Error fetching tenant details:", error);
+    }
+  };
+
+  const fetchHandOffConfig = async () => {
+    try {
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/tenant/handoff-config/${tenantId}`);
+      const data = response.data?.data || response.data;
+      if (data) {
+        console.log("[HandOffConfig] raw response:", data);
+
+        const hasHandOffNumberKey =
+          "handOffNumber" in data ||
+          "handoffNumber" in data ||
+          "handoff_number" in data;
+        const hasHandOffStartKey =
+          "handOffStartTime" in data ||
+          "handoffStartTime" in data ||
+          "handoff_start_time" in data;
+        const hasHandOffEndKey =
+          "handOffEndTime" in data ||
+          "handoffEndTime" in data ||
+          "handoff_end_time" in data;
+        const hasRecordingKey =
+          "isRecordingAllowed" in data || "is_recording_allowed" in data;
+
+        const handOffNumberValue =
+          data.handOffNumber ?? data.handoffNumber ?? data.handoff_number ?? "";
+        const handOffStartTimeValue =
+          data.handOffStartTime ??
+          data.handoffStartTime ??
+          data.handoff_start_time ??
+          "";
+        const handOffEndTimeValue =
+          data.handOffEndTime ??
+          data.handoffEndTime ??
+          data.handoff_end_time ??
+          "";
+        const isRecordingAllowedValue =
+          data.isRecordingAllowed ?? data.is_recording_allowed ?? false;
+
+        setHandConfig((prev) => ({
+          handOffNumber: hasHandOffNumberKey
+            ? handOffNumberValue || ""
+            : prev.handOffNumber,
+          handOffStartTime: hasHandOffStartKey
+            ? normalizeTimeValue(handOffStartTimeValue)
+            : prev.handOffStartTime,
+          handOffEndTime: hasHandOffEndKey
+            ? normalizeTimeValue(handOffEndTimeValue)
+            : prev.handOffEndTime,
+          isRecordingAllowed: hasRecordingKey
+            ? Boolean(isRecordingAllowedValue)
+            : prev.isRecordingAllowed,
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching handoff config:", error);
     }
   };
 
@@ -324,7 +364,9 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
   const buildDetailsPayload = () => ({
     name: basicDetails.name.trim(),
     email: basicDetails.email.trim(),
-    // Human handoff fields: send both camelCase and snake_case variants
+  });
+
+  const buildHandOffPayload = () => ({
     handOffNumber: handConfig.handOffNumber.trim(),
     handoffNumber: handConfig.handOffNumber.trim(),
     handoff_number: handConfig.handOffNumber.trim(),
@@ -429,37 +471,37 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
 
 
   const handleSaveHandConfig = async () => {
-  if (
-    !handConfig.handOffNumber.trim() ||
-    !handConfig.handOffStartTime ||
-    !handConfig.handOffEndTime
-  ) {
-    addNotification(
-      "Please provide handoff number and both start/end times.",
-      "error"
-    );
-    return;
-  }
+    if (
+      !handConfig.handOffNumber.trim() ||
+      !handConfig.handOffStartTime ||
+      !handConfig.handOffEndTime
+    ) {
+      addNotification(
+        "Please provide handoff number and both start/end times.",
+        "error"
+      );
+      return;
+    }
 
-  try {
-    setSavingHandConfig(true); // ✅ ADD THIS
-    const tenantId = getTenantIdOrThrow();
-    await axiosClient.put(
-      `/tenant/details-config/${tenantId}`,
-      buildDetailsPayload()
-    );
-    addNotification("Hand configuration updated successfully", "success");
-    await fetchTenantDetails();
-  } catch (error: any) {
-    console.error("Error updating handoff configuration:", error);
-    const message =
-      error.response?.data?.message ||
-      "Failed to update handoff configuration";
-    addNotification(message, "error");
-  } finally {
-    setSavingHandConfig(false); // ✅ ADD THIS
-  }
-};
+    try {
+      setSavingHandConfig(true);
+      const tenantId = getTenantIdOrThrow();
+      await axiosClient.put(
+        `/tenant/handoff-config/${tenantId}`,
+        buildHandOffPayload()
+      );
+      addNotification("Hand configuration updated successfully", "success");
+      await fetchHandOffConfig();
+    } catch (error: any) {
+      console.error("Error updating handoff configuration:", error);
+      const message =
+        error.response?.data?.message ||
+        "Failed to update handoff configuration";
+      addNotification(message, "error");
+    } finally {
+      setSavingHandConfig(false);
+    }
+  };
 
   const handleAvatarChange = () => {
     addNotification("Avatar upload feature coming soon", "info");
@@ -1289,13 +1331,11 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
                   </label>
                   <input
                     type="number"
-                    value={llmForm.maxTokens || ""}
+                    value={llmForm.maxTokens === null ? "" : llmForm.maxTokens}
                     onChange={(e) =>
                       setLlmForm({
                         ...llmForm,
-                        maxTokens: e.target.value
-                          ? parseInt(e.target.value)
-                          : null,
+                        maxTokens: e.target.value === "" ? null : parseInt(e.target.value)
                       })
                     }
                     placeholder="e.g., 2000"
@@ -1307,20 +1347,21 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
                     Temperature (0.0 - 1.0)
                   </label>
                   <input
-  type="number"
-  step="0.1"
-  min="0"
-  max="1"
-  value={llmForm.temperature ?? ""}
-  onChange={(e) =>
-    setLlmForm({
-      ...llmForm,
-      temperature: e.target.value, // keep as string
-    })
-  }
-  placeholder="e.g., 0.7"
-  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-/>
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={llmForm.temperature === null ? "" : llmForm.temperature}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setLlmForm({
+                        ...llmForm,
+                        temperature: value === "" ? null : parseFloat(value)
+                      });
+                    }}
+                    placeholder="e.g., 0.7"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
               </div>
 
