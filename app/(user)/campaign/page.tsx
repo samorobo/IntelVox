@@ -37,14 +37,14 @@ interface Campaign {
   tenantId?: string;
 
   //newly added field
-tenantName?: string;
-tenantEmail?: string;
-labelName?: string;
-agentType?: string
-agentStatus?: string;
-agentVoice?: string;
-agentConversations?: string;
-agentRetention?: string;
+  tenantName?: string;
+  tenantEmail?: string;
+  labelName?: string;
+  agentType?: string;
+  agentStatus?: string;
+  agentVoice?: string;
+  agentConversations?: string;
+  agentRetention?: string;
 }
 
 interface AIAgent {
@@ -56,7 +56,6 @@ interface Label {
   id: string;
   name: string;
 }
-
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -95,104 +94,102 @@ export default function CampaignsPage() {
   // }, []);
 
   useEffect(() => {
-  const loadData = async () => {
-    await fetchAgents();  // Wait for agents first
-    await fetchLabels();
-    await fetchCampaigns(); // Then fetch campaigns
-  };
-  loadData();
-}, []);
+    const loadData = async () => {
+      await fetchAgents(); // Wait for agents first
+      await fetchLabels();
+      await fetchCampaigns(); // Then fetch campaigns
+    };
+    loadData();
+  }, []);
 
-
-useEffect(() => {
-  if (aiAgents.length > 0 && campaigns.length === 0) {
-    fetchCampaigns();
-  }
-}, [aiAgents]);
-
+  useEffect(() => {
+    if (aiAgents.length > 0 && campaigns.length === 0) {
+      fetchCampaigns();
+    }
+  }, [aiAgents]);
 
   const handleViewCampaign = async (id: string) => {
-  try {
-    setViewLoading(true);
-    const tenantId = getTenantIdOrThrow();
-    const response = await axiosClient.get(`/campaign/${tenantId}/${id}`);
+    try {
+      setViewLoading(true);
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/campaign/${tenantId}/${id}`);
 
-    // Backend may return:
-    // - a plain object
-    // - { data: object }
-    // - a JSON string of either of the above
-    let payload: any = response.data;
+      // Backend may return:
+      // - a plain object
+      // - { data: object }
+      // - a JSON string of either of the above
+      let payload: any = response.data;
 
-    if (typeof payload === "string") {
-      try {
-        payload = JSON.parse(payload);
-      } catch (e) {
-        console.error("Failed to parse campaign details JSON:", e);
-        toast.error("Failed to load campaign details");
-        return;
+      if (typeof payload === "string") {
+        try {
+          payload = JSON.parse(payload);
+        } catch (e) {
+          console.error("Failed to parse campaign details JSON:", e);
+          toast.error("Failed to load campaign details");
+          return;
+        }
       }
-    }
 
-    let data: any = payload?.data ?? payload;
+      let data: any = payload?.data ?? payload;
 
-    // If backend still returns an array, pick matching id or first
-    if (Array.isArray(data)) {
-      if (data.length === 0) {
+      // If backend still returns an array, pick matching id or first
+      if (Array.isArray(data)) {
+        if (data.length === 0) {
+          toast.error("Campaign details not found");
+          return;
+        }
+        data = data.find((item: any) => item.id === id) ?? data[0];
+      }
+
+      if (!data || typeof data !== "object") {
         toast.error("Campaign details not found");
         return;
       }
-      data = data.find((item: any) => item.id === id) ?? data[0];
+
+      const formatted: Campaign = {
+        id: data.id || data._id,
+        name: data.name,
+        type: data.type,
+        agentId: data.agentId,
+        aiAgent: data.agent?.name || "",
+        startDate: data.startDate,
+        endDate: data.endDate,
+        status: data.status,
+        description: data.description,
+        labelId: data.labelId,
+        totalCalls: data.totalCalls ?? "0",
+        contactsReached: data.contactsReached ?? "0",
+        conversationRate: data.conversationRate ?? "0%",
+        tenantId: data.tenantId,
+
+        // New mapped fields from your sample response
+        tenantName: data.tenant?.name,
+        tenantEmail: data.tenant?.email,
+        labelName: data.label?.name,
+        agentType: data.agent?.type,
+        agentStatus: data.agent?.status,
+        agentVoice: data.agent?.voice,
+        agentConversations: data.agent?.conversations,
+        agentRetention: data.agent?.retention,
+      };
+
+      setViewCampaign(formatted);
+    } catch (error: any) {
+      console.error("Error fetching campaign details:", error);
+      toast.error(
+        error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          "Failed to load campaign details"
+      );
+    } finally {
+      setViewLoading(false);
     }
-
-    if (!data || typeof data !== "object") {
-      toast.error("Campaign details not found");
-      return;
-    }
-
-    const formatted: Campaign = {
-      id: data.id || data._id,
-      name: data.name,
-      type: data.type,
-      agentId: data.agentId,
-      aiAgent: data.agent?.name || "",
-      startDate: data.startDate,
-      endDate: data.endDate,
-      status: data.status,
-      description: data.description,
-      labelId: data.labelId,
-      totalCalls: data.totalCalls ?? "0",
-      contactsReached: data.contactsReached ?? "0",
-      conversationRate: data.conversationRate ?? "0%",
-      tenantId: data.tenantId,
-
-      // New mapped fields from your sample response
-      tenantName: data.tenant?.name,
-      tenantEmail: data.tenant?.email,
-      labelName: data.label?.name,
-      agentType: data.agent?.type,
-      agentStatus: data.agent?.status,
-      agentVoice: data.agent?.voice,
-      agentConversations: data.agent?.conversations,
-      agentRetention: data.agent?.retention,
-    };
-
-    setViewCampaign(formatted);
-  } catch (error: any) {
-    console.error("Error fetching campaign details:", error);
-    toast.error(
-      error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        "Failed to load campaign details"
-    );
-  } finally {
-    setViewLoading(false);
-  }
-};
+  };
 
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
-      const  tenantId = getTenantIdOrThrow();
+      const tenantId = getTenantIdOrThrow();
       const response = await axiosClient.get(`/campaign/${tenantId}`);
       // Map backend response to match our interface
       const formattedCampaigns = response.data.map((campaign: any) => {
@@ -226,7 +223,9 @@ useEffect(() => {
 
   const fetchAgents = async () => {
     try {
-      const response = await axiosClient.get(`/agents`);
+      const tenantId = getTenantIdOrThrow();
+      alert(tenantId);
+      const response = await axiosClient.get(`/agents/${tenantId}`);
       setAiAgents(response.data);
     } catch (error: any) {
       console.error("Error fetching agents:", error);
@@ -323,10 +322,9 @@ useEffect(() => {
   const handleStartCall = async (campaignId: string) => {
     try {
       const tenantId = getTenantIdOrThrow();
-      const response = await axiosClient.post(
-        `/call/${tenantId}/outbound`,
-        { campaignId }
-      );
+      const response = await axiosClient.post(`/call/${tenantId}/outbound`, {
+        campaignId,
+      });
       toast.success("Outbound call started successfully");
       console.log("Call response:", response.data);
     } catch (error: any) {
@@ -628,7 +626,8 @@ useEffect(() => {
                       </h3>
                     </div>
                     <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {formatDate(viewCampaign.startDate)} - {formatDate(viewCampaign.endDate)}
+                      {formatDate(viewCampaign.startDate)} -{" "}
+                      {formatDate(viewCampaign.endDate)}
                     </p>
                   </div>
                   <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-700">

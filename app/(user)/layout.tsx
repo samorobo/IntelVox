@@ -3,6 +3,7 @@
 import "../globals.css";
 import { ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -23,6 +24,7 @@ import { getTenantId } from "@/lib/utils";
 interface DashboardLayoutProps {
   children: ReactNode;
 }
+
 const navItems = [
   {
     href: "/profile",
@@ -65,12 +67,14 @@ const navItems = [
     icon: Users,
   },
 ];
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [darkMode, setDarkMode] = useState(false);
   const [userInfo, setUserInfo] = useState<{ name: string; email: string }>({
     name: "",
     email: "",
   });
+  const router = useRouter();
 
   useEffect(() => {
     // Only access localStorage on client side
@@ -98,11 +102,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       const fetchFromTenantDetails = async (tenantId: string) => {
         try {
-          const response = await axiosClient.get(`/tenant/details-config/${tenantId}`);
+          const response = await axiosClient.get(
+            `/tenant/details-config/${tenantId}`
+          );
           const data = response.data?.data || response.data;
           if (data) {
-            const name = data.name?.trim() || localStorage.getItem("tenantName") || "";
-            const email = data.email || localStorage.getItem("tenantEmail") || "";
+            const name =
+              data.name?.trim() || localStorage.getItem("tenantName") || "";
+            const email =
+              data.email || localStorage.getItem("tenantEmail") || "";
             if (typeof window !== "undefined") {
               if (name) localStorage.setItem("tenantName", name);
               if (email) localStorage.setItem("tenantEmail", email);
@@ -126,15 +134,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           return;
         }
 
-        const response = await axiosClient.get(`/otp/verify?tenantId=${tenantId}`);
+        const response = await axiosClient.get(
+          `/otp/verify?tenantId=${tenantId}`
+        );
         const tenantData =
           response.data?.data?.tenant ||
           response.data?.tenant ||
           response.data?.data;
 
         if (tenantData) {
-          const name = tenantData.name?.trim() || localStorage.getItem("tenantName") || "";
-          const email = tenantData.email || localStorage.getItem("tenantEmail") || "";
+          const name =
+            tenantData.name?.trim() || localStorage.getItem("tenantName") || "";
+          const email =
+            tenantData.email || localStorage.getItem("tenantEmail") || "";
 
           if (typeof window !== "undefined") {
             if (name) localStorage.setItem("tenantName", name);
@@ -167,6 +179,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const newDarkMode = !darkMode;
     setDarkMode(newDarkMode);
     localStorage.setItem("theme", newDarkMode ? "dark" : "light");
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to logout?")) {
+      localStorage.removeItem("tenantId");
+      router.push("/");
+    }
   };
 
   return (
@@ -217,7 +236,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     </span>
                   </div>
                 </Link>
-                <button className="flex items-center gap-3 px-3 py-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 w-full">
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 w-full"
+                >
                   <LogOut className="w-5 h-5" />
                   <span className="text-sm font-medium">Log Out</span>
                 </button>
