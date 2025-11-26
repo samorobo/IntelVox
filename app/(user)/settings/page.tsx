@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Camera, Edit, Trash2, Plus, X, Eye, EyeOff } from "lucide-react";
+import { Camera, Edit, Trash2, Plus, X, Eye, EyeOff, Copy } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import axiosClient from "@/lib/axiosClient";
 import { getTenantId, getTenantIdOrThrow } from "@/lib/utils";
@@ -33,6 +33,25 @@ interface Notification {
   type: "success" | "error" | "info";
   timestamp: number;
 }
+
+interface WebhookConfig {
+  tenantId: string;
+  webhookBaseUrl: string;
+  webhooks: {
+    main_webhook: {
+      url: string;
+      description: string;
+      note: string;
+    };
+  };
+  setup_instructions: {
+    inbound_calls: {
+      primary_webhook: string;
+      instructions: string[];
+    };
+  };
+}
+
 
 export default function UserSettingsPage() {
   const [user, setUser] = useState({
@@ -75,6 +94,13 @@ export default function UserSettingsPage() {
   const [visibleAccountSids, setVisibleAccountSids] = useState<Set<string>>(
     new Set()
   );
+
+
+
+const [webhookConfig, setWebhookConfig] = useState<WebhookConfig | null>(null);
+const [webhookLoading, setWebhookLoading] = useState(false);
+const [webhookError, setWebhookError] = useState<string | null>(null);
+const [copiedWebhook, setCopiedWebhook] = useState(false);
 
   const [llmForm, setLlmForm] = useState<
     Omit<LLMConfig, "id" | "isActive" | "createdAt" | "updatedAt">
@@ -121,6 +147,7 @@ export default function UserSettingsPage() {
     fetchTenantDetails();
     fetchLLMConfigs();
     fetchTwilioConfigs();
+    fetchWebhookConfig();
   }, []);
 
   const fetchLLMConfigs = async () => {
@@ -159,6 +186,46 @@ export default function UserSettingsPage() {
       return value.slice(0, 5);
     }
     return value;
+  };
+
+  const fetchWebhookConfig = async () => {
+    try {
+      setWebhookLoading(true);
+      setWebhookError(null);
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/call/${tenantId}/webhook-config`);
+
+      console.log("[Webhook] tenantId used:", tenantId);
+      console.log("[Webhook] raw response:", response.data);
+
+      // Support both plain object and { data: object } wrapper, plus JSON strings
+      let payload: any = response.data?.data ?? response.data;
+
+      if (typeof payload === "string") {
+        try {
+          payload = JSON.parse(payload);
+        } catch (e) {
+          console.error("[Webhook] Failed to parse JSON string payload:", e);
+        }
+      }
+
+      if (payload) {
+        setWebhookConfig(payload as WebhookConfig);
+      } else {
+        console.warn("[Webhook] Empty webhook payload received:", payload);
+        setWebhookConfig(null);
+      }
+    } catch (error) {
+      console.error("Error fetching webhook config:", error);
+      setWebhookError(
+        (error as any)?.response?.data?.message ||
+          (error as any)?.response?.data?.error ||
+          "Failed to fetch webhook configuration"
+      );
+      addNotification("Failed to fetch webhook configuration", "error");
+    } finally {
+      setWebhookLoading(false);
+    }
   };
 
   const fetchTenantDetails = async () => {
@@ -509,6 +576,17 @@ export default function UserSettingsPage() {
   };
 
   const RequiredAsterisk = () => <span className="text-red-500 ml-1">*</span>;
+
+  const handleCopyWebhook = async (url: string) => {
+  try {
+    await navigator.clipboard.writeText(url);
+    setCopiedWebhook(true);
+    addNotification("Webhook URL copied to clipboard!", "success");
+    setTimeout(() => setCopiedWebhook(false), 2000);
+  } catch (error) {
+    addNotification("Failed to copy webhook URL", "error");
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -954,7 +1032,79 @@ export default function UserSettingsPage() {
             </div>
           )}
         </div>
+
+        {/* Webhook Configuration Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Webhook Configuration
+          </h3>
+
+          {webhookLoading ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Loading webhook configuration...
+            </p>
+          ) : webhookError ? (
+            <p className="text-sm text-red-500">
+              {webhookError}
+            </p>
+          ) : !webhookConfig ? (
+            <p className="text-sm text-red-500">
+              Webhook configuration not available. Please ensure your account is properly set up.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                  Primary webhook URL
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Unified webhook for both inbound and outbound calls.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs md:text-sm break-all rounded bg-gray-100 dark:bg-gray-900 px-3 py-2 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                    {webhookConfig?.webhooks?.main_webhook?.url ?? ""}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyWebhook(
+                        webhookConfig?.setup_instructions?.inbound_calls
+                          ?.primary_webhook ?? ""
+                      )
+                    }
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Copy className="w-4 h-4" />
+                    {copiedWebhook ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                {webhookConfig?.webhooks?.main_webhook?.note && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {webhookConfig.webhooks.main_webhook.note}
+                  </p>
+                )}
+              </div>
+
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  Inbound call setup instructions
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Follow these steps in your Twilio console to configure inbound calls:
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                  {webhookConfig?.setup_instructions?.inbound_calls?.instructions?.map(
+                    (line, idx) => <li key={idx}>{line}</li>
+                  )}
+                </ol>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+
+      
 
       {showLLMModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
