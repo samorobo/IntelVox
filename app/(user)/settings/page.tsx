@@ -102,6 +102,10 @@ const [webhookLoading, setWebhookLoading] = useState(false);
 const [webhookError, setWebhookError] = useState<string | null>(null);
 const [copiedWebhook, setCopiedWebhook] = useState(false);
 
+
+const [savingBasicDetails, setSavingBasicDetails] = useState(false);
+const [savingHandConfig, setSavingHandConfig] = useState(false);
+
   const [llmForm, setLlmForm] = useState<
     Omit<LLMConfig, "id" | "isActive" | "createdAt" | "updatedAt">
   >({
@@ -234,6 +238,21 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
       const response = await axiosClient.get(`/tenant/details-config/${tenantId}`);
       const data = response.data?.data || response.data;
       if (data) {
+        const handOffNumberValue =
+          data.handOffNumber ?? data.handoffNumber ?? data.handoff_number ?? "";
+        const handOffStartTimeValue =
+          data.handOffStartTime ??
+          data.handoffStartTime ??
+          data.handoff_start_time ??
+          "";
+        const handOffEndTimeValue =
+          data.handOffEndTime ??
+          data.handoffEndTime ??
+          data.handoff_end_time ??
+          "";
+        const isRecordingAllowedValue =
+          data.isRecordingAllowed ?? data.is_recording_allowed ?? false;
+
         setBasicDetails({
           name: data.name || "",
           email: data.email || "",
@@ -252,10 +271,10 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
           }
         }
         setHandConfig({
-          handOffNumber: data.handOffNumber || "",
-          handOffStartTime: normalizeTimeValue(data.handOffStartTime),
-          handOffEndTime: normalizeTimeValue(data.handOffEndTime),
-          isRecordingAllowed: Boolean(data.isRecordingAllowed),
+          handOffNumber: handOffNumberValue || "",
+          handOffStartTime: normalizeTimeValue(handOffStartTimeValue),
+          handOffEndTime: normalizeTimeValue(handOffEndTimeValue),
+          isRecordingAllowed: Boolean(isRecordingAllowedValue),
         });
       }
     } catch (error) {
@@ -305,66 +324,142 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
   const buildDetailsPayload = () => ({
     name: basicDetails.name.trim(),
     email: basicDetails.email.trim(),
+    // Human handoff fields: send both camelCase and snake_case variants
     handOffNumber: handConfig.handOffNumber.trim(),
+    handoffNumber: handConfig.handOffNumber.trim(),
+    handoff_number: handConfig.handOffNumber.trim(),
+
     handOffStartTime: handConfig.handOffStartTime,
+    handoffStartTime: handConfig.handOffStartTime,
+    handoff_start_time: handConfig.handOffStartTime,
+
     handOffEndTime: handConfig.handOffEndTime,
+    handoffEndTime: handConfig.handOffEndTime,
+    handoff_end_time: handConfig.handOffEndTime,
+
     isRecordingAllowed: handConfig.isRecordingAllowed,
+    is_recording_allowed: handConfig.isRecordingAllowed,
   });
 
-  const handleSaveBasicDetails = async () => {
-    if (!basicDetails.name.trim() || !basicDetails.email.trim()) {
-      addNotification("Please provide both company name and email.", "error");
-      return;
-    }
+  // const handleSaveBasicDetails = async () => {
+  //   if (!basicDetails.name.trim() || !basicDetails.email.trim()) {
+  //     addNotification("Please provide both company name and email.", "error");
+  //     return;
+  //   }
 
-    try {
-      const tenantId = getTenantIdOrThrow();
-      await axiosClient.put(
-        `/tenant/details-config/${tenantId}`,
-        buildDetailsPayload()
-      );
-      setUser((prev) => ({
-        ...prev,
-        name: basicDetails.name,
-        email: basicDetails.email,
-      }));
-      addNotification("Basic details updated successfully", "success");
-    } catch (error: any) {
-      console.error("Error updating basic details:", error);
-      const message =
-        error.response?.data?.message || "Failed to update basic details";
-      addNotification(message, "error");
-    }
-  };
+  //   try {
+  //     const tenantId = getTenantIdOrThrow();
+  //     await axiosClient.put(
+  //       `/tenant/details-config/${tenantId}`,
+  //       buildDetailsPayload()
+  //     );
+  //     setUser((prev) => ({
+  //       ...prev,
+  //       name: basicDetails.name,
+  //       email: basicDetails.email,
+  //     }));
+  //     addNotification("Basic details updated successfully", "success");
+  //   } catch (error: any) {
+  //     console.error("Error updating basic details:", error);
+  //     const message =
+  //       error.response?.data?.message || "Failed to update basic details";
+  //     addNotification(message, "error");
+  //   }
+  // };
+
+
+ const handleSaveBasicDetails = async () => {
+  if (!basicDetails.name.trim() || !basicDetails.email.trim()) {
+    addNotification("Please provide both company name and email.", "error");
+    return;
+  }
+
+  try {
+    setSavingBasicDetails(true); // ✅ ADD THIS
+    const tenantId = getTenantIdOrThrow();
+    await axiosClient.put(
+      `/tenant/details-config/${tenantId}`,
+      buildDetailsPayload()
+    );
+    setUser((prev) => ({
+      ...prev,
+      name: basicDetails.name,
+      email: basicDetails.email,
+    }));
+    addNotification("Basic details updated successfully", "success");
+    await fetchTenantDetails();
+  } catch (error: any) {
+    console.error("Error updating basic details:", error);
+    const message =
+      error.response?.data?.message || "Failed to update basic details";
+    addNotification(message, "error");
+  } finally {
+    setSavingBasicDetails(false); // ✅ ADD THIS
+  }
+};
+
+  // const handleSaveHandConfig = async () => {
+  //   if (
+  //     !handConfig.handOffNumber.trim() ||
+  //     !handConfig.handOffStartTime ||
+  //     !handConfig.handOffEndTime
+  //   ) {
+  //     addNotification(
+  //       "Please provide handoff number and both start/end times.",
+  //       "error"
+  //     );
+  //     return;
+  //   }
+
+  //   try {
+  //     const tenantId = getTenantIdOrThrow();
+  //     await axiosClient.put(
+  //       `/tenant/details-config/${tenantId}`,
+  //       buildDetailsPayload()
+  //     );
+  //     addNotification("Hand configuration updated successfully", "success");
+  //   } catch (error: any) {
+  //     console.error("Error updating handoff configuration:", error);
+  //     const message =
+  //       error.response?.data?.message ||
+  //       "Failed to update handoff configuration";
+  //     addNotification(message, "error");
+  //   }
+  // };
+
 
   const handleSaveHandConfig = async () => {
-    if (
-      !handConfig.handOffNumber.trim() ||
-      !handConfig.handOffStartTime ||
-      !handConfig.handOffEndTime
-    ) {
-      addNotification(
-        "Please provide handoff number and both start/end times.",
-        "error"
-      );
-      return;
-    }
+  if (
+    !handConfig.handOffNumber.trim() ||
+    !handConfig.handOffStartTime ||
+    !handConfig.handOffEndTime
+  ) {
+    addNotification(
+      "Please provide handoff number and both start/end times.",
+      "error"
+    );
+    return;
+  }
 
-    try {
-      const tenantId = getTenantIdOrThrow();
-      await axiosClient.put(
-        `/tenant/details-config/${tenantId}`,
-        buildDetailsPayload()
-      );
-      addNotification("Hand configuration updated successfully", "success");
-    } catch (error: any) {
-      console.error("Error updating handoff configuration:", error);
-      const message =
-        error.response?.data?.message ||
-        "Failed to update handoff configuration";
-      addNotification(message, "error");
-    }
-  };
+  try {
+    setSavingHandConfig(true); // ✅ ADD THIS
+    const tenantId = getTenantIdOrThrow();
+    await axiosClient.put(
+      `/tenant/details-config/${tenantId}`,
+      buildDetailsPayload()
+    );
+    addNotification("Hand configuration updated successfully", "success");
+    await fetchTenantDetails();
+  } catch (error: any) {
+    console.error("Error updating handoff configuration:", error);
+    const message =
+      error.response?.data?.message ||
+      "Failed to update handoff configuration";
+    addNotification(message, "error");
+  } finally {
+    setSavingHandConfig(false); // ✅ ADD THIS
+  }
+};
 
   const handleAvatarChange = () => {
     addNotification("Avatar upload feature coming soon", "info");
@@ -676,11 +771,19 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
           </div>
           <div className="flex justify-end">
             <button
-              onClick={handleSaveBasicDetails}
-              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              Save Changes
-            </button>
+  onClick={handleSaveBasicDetails}
+  disabled={savingBasicDetails}
+  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+>
+  {savingBasicDetails ? (
+    <>
+      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      Saving...
+    </>
+  ) : (
+    "Save Changes"
+  )}
+</button>
           </div>
         </div>
 
@@ -695,6 +798,7 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
               </label>
               <input
                 type="text"
+                placeholder="e.g +911234567890"
                 value={handConfig.handOffNumber}
                 onChange={(e) =>
                   handleHandConfigChange("handOffNumber", e.target.value)
@@ -746,7 +850,7 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
                 Allow recording and transcription
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Enable this to record calls and generate transcriptions during human handoff.
+                Enable this to record calls and generate transcriptions.
               </p>
             </div>
             <button
@@ -772,11 +876,19 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
           </div>
           <div className="flex justify-end">
             <button
-              onClick={handleSaveHandConfig}
-              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              Save Changes
-            </button>
+  onClick={handleSaveHandConfig}
+  disabled={savingHandConfig}
+  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+>
+  {savingHandConfig ? (
+    <>
+      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      Saving...
+    </>
+  ) : (
+    "Save Changes"
+  )}
+</button>
           </div>
         </div>
 
@@ -1195,22 +1307,20 @@ const [copiedWebhook, setCopiedWebhook] = useState(false);
                     Temperature (0.0 - 1.0)
                   </label>
                   <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="1"
-                    value={llmForm.temperature || ""}
-                    onChange={(e) =>
-                      setLlmForm({
-                        ...llmForm,
-                        temperature: e.target.value
-                          ? parseFloat(e.target.value)
-                          : null,
-                      })
-                    }
-                    placeholder="e.g., 0.7"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+  type="number"
+  step="0.1"
+  min="0"
+  max="1"
+  value={llmForm.temperature ?? ""}
+  onChange={(e) =>
+    setLlmForm({
+      ...llmForm,
+      temperature: e.target.value, // keep as string
+    })
+  }
+  placeholder="e.g., 0.7"
+  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+/>
                 </div>
               </div>
 

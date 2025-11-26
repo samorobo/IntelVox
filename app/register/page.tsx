@@ -171,7 +171,7 @@ export default function UserSignupFlow() {
     setError("");
 
     try {
-      const response = await axiosClient.post("/tenant", {
+      const response = await axiosClient.post("/tenants", {
         name: profile.name,
         email,
         planId: selectedPlan,
