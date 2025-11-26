@@ -224,7 +224,6 @@ export default function CampaignsPage() {
   const fetchAgents = async () => {
     try {
       const tenantId = getTenantIdOrThrow();
-      alert(tenantId);
       const response = await axiosClient.get(`/agents/${tenantId}`);
       setAiAgents(response.data);
     } catch (error: any) {
