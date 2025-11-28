@@ -52,18 +52,3 @@ export function detectPhoneFields(headers: string[]): string[] {
         phonePatterns.some(pattern => pattern.test(header))
     );
 }
-
-export function extractPhoneNumbersFromCSV(data: any[], phoneField: string): string[] {
-    const numbers: string[] = [];
-
-    data.forEach(row => {
-        if (row[phoneField]) {
-            const validation = validatePhoneNumber(row[phoneField]);
-            if (validation.isValid) {
-                numbers.push(validation.cleaned);
-            }
-        }
-    });
-
-    return numbers;
-}

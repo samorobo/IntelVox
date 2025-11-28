@@ -3,7 +3,7 @@
 
 import { useState, useRef } from "react";
 import Papa from "papaparse";
-import axiosClient from "@/lib/axiosClient"; // Use axiosClient instead of axios
+import axiosClient from "@/lib/axiosClient";
 import { validatePhoneNumber, detectPhoneFields } from "@/lib/phoneValidation";
 import { Upload, X, Check, AlertCircle, Download, Edit, Save } from "lucide-react";
 
@@ -16,7 +16,7 @@ interface CSVPhoneImportProps {
 interface ContactPreview {
     id: string;
     number: string;
-    name?: string;
+    name: string;
     isValid: boolean;
     error?: string;
     isEdited?: boolean;
@@ -36,6 +36,30 @@ export default function CSVPhoneImport({ tenantId, onImportComplete, onCancel }:
         invalid: 0
     });
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const downloadSampleCSV = () => {
+        const sampleData = [
+            { name: "John Doe", phone: "+1234567890", mobile: "08012345678", contact_number: "2348012345678", consent: "true" },
+            { name: "Jane Smith", phone: "+1987654321", mobile: "07098765432", contact_number: "2347012345678", consent: "true" },
+            { name: "Bob Johnson", phone: "+1555123456", mobile: "08123456789", contact_number: "2348112345678", consent: "false" },
+            { name: "Alice Brown", phone: "+447700900123", mobile: "09012345678", contact_number: "2349012345678", consent: "true" },
+            { name: "Mike Wilson", phone: "+61412345678", mobile: "09123456789", contact_number: "2349112345678", consent: "true" },
+            { name: "Sarah Davis", phone: "+4915123456789", mobile: "08087654321", contact_number: "2348087654321", consent: "false" },
+            { name: "David Miller", phone: "+81312345678", mobile: "07011223344", contact_number: "2347011223344", consent: "true" },
+            { name: "Emma Garcia", phone: "+34612345678", mobile: "08112233445", contact_number: "2348112233445", consent: "true" },
+            { name: "James Rodriguez", phone: "+393331234567", mobile: "09098765432", contact_number: "2349098765432", consent: "true" },
+            { name: "Lisa Martinez", phone: "+27111234567", mobile: "08055667788", contact_number: "2348055667788", consent: "false" }
+        ];
+
+        const csv = Papa.unparse(sampleData);
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "sample_contacts.csv";
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -149,51 +173,46 @@ export default function CSVPhoneImport({ tenantId, onImportComplete, onCancel }:
             .map(contact => ({
                 name: contact.name,
                 number: contact.number,
-                tenantId,
+                tenantId: tenantId,
                 consent: true,
                 status: "on_hold" as const
             }));
 
         try {
-            // Use axiosClient instead of direct axios
+            console.log("Making API call to:", `/api/tenants/${tenantId}/contacts/bulk`);
+            console.log("Payload:", { contacts: validContacts });
+
             const response = await axiosClient.post(`/api/tenants/${tenantId}/contacts/bulk`, {
                 contacts: validContacts
             });
+
+            console.log("API Response:", response.data);
 
             if (onImportComplete) {
                 onImportComplete(response.data);
             }
         } catch (error: any) {
             console.error("Error importing contacts:", error);
+            console.error("Error details:", {
+                message: error.message,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                url: error.config?.url
+            });
 
-            // Better error message
             let errorMessage = "Failed to import contacts. Please try again.";
-            if (error.code === 'NETWORK_ERROR' || error.message === 'Network Error') {
-                errorMessage = "Cannot connect to server. Please make sure the backend is running.";
+            if (error.response?.status === 404) {
+                errorMessage = "API endpoint not found. Please check if the backend server is running.";
             } else if (error.response?.data?.error) {
                 errorMessage = error.response.data.error;
+            } else if (error.code === 'NETWORK_ERROR' || error.message === 'Network Error') {
+                errorMessage = "Cannot connect to server. Please make sure the backend is running on localhost:8000.";
             }
 
             alert(errorMessage);
             setStep("preview");
         }
-    };
-
-    const downloadSampleCSV = () => {
-        const sampleData = [
-            { name: "John Doe", phone: "+1 (555) 123-4567", mobile: "08012345678" },
-            { name: "Jane Smiths", phone: "+44 7700 900123", mobile: "07098765432" },
-            { name: "Bob Johnson", phone: "234-801-234-5678", mobile: "08123456789" }
-        ];
-
-        const csv = Papa.unparse(sampleData);
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "sample_contacts.csv";
-        a.click();
-        window.URL.revokeObjectURL(url);
     };
 
     if (step === "processing") {
@@ -259,6 +278,7 @@ export default function CSVPhoneImport({ tenantId, onImportComplete, onCancel }:
                                 <li>Phone numbers can be in any common format</li>
                                 <li>Include a "name" column for contact names (optional)</li>
                                 <li>File should be UTF-8 encoded</li>
+                                <li>Consent column should be "true" or "false" (will be set to true in bulk import)</li>
                             </ul>
 
                             <button

@@ -1,4 +1,4 @@
-// app/bulk-upload/page.tsx
+// app/contacts/bulk-upload/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -65,7 +65,7 @@ export default function BulkUploadPage() {
     };
 
     const handleBackToContacts = () => {
-        router.push("/contact-leads");
+        router.push("/contacts");
     };
 
     if (importStatus === "success" && importResult?.data) {
