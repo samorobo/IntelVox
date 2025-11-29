@@ -78,7 +78,7 @@ export default function UserSettingsPage() {
   const [llmLoading, setLlmLoading] = useState(false);
   const [twilioLoading, setTwilioLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"llm" | "twilio">("llm");
+  const [activeTab, setActiveTab] = useState<"llm" | "twilio">("twilio");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showLLMModal, setShowLLMModal] = useState(false);
   const [showTwilioModal, setShowTwilioModal] = useState(false);
@@ -940,6 +940,8 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
           </h3>
 
           <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
+            {/** LLM tab hidden for now but kept for future use **/}
+            {/**
             <button
               onClick={() => setActiveTab("llm")}
               className={`pb-3 px-2 font-medium transition-colors ${
@@ -950,6 +952,7 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
             >
               LLM
             </button>
+            **/}
             <button
               onClick={() => setActiveTab("twilio")}
               className={`pb-3 px-2 font-medium transition-colors ${
@@ -962,6 +965,8 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
             </button>
           </div>
 
+          {/** LLM tab content hidden for now but preserved for future use **/}
+          {/**
           {activeTab === "llm" && (
             <div>
               <div className="flex justify-end mb-4">
@@ -1071,6 +1076,7 @@ const [savingHandConfig, setSavingHandConfig] = useState(false);
               </div>
             </div>
           )}
+          **/}
 
           {activeTab === "twilio" && (
             <div>

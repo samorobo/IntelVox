@@ -85,6 +85,10 @@ export default function ContactLeadsPage() {
   const [newLabelName, setNewLabelName] = useState("");
   const [labelError, setLabelError] = useState<string | null>(null);
   const [loadingLabels, setLoadingLabels] = useState(false);
+  const [activeTab, setActiveTab] = useState<"leads" | "labels">("leads");
+  const [isDeleteLabelModalOpen, setIsDeleteLabelModalOpen] = useState(false);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [isDeletingLabel, setIsDeletingLabel] = useState(false);
 
   // Fetch contacts and labels on component mount
   useEffect(() => {
@@ -146,6 +150,7 @@ export default function ContactLeadsPage() {
   const fetchLabels = async () => {
     try {
       setLoadingLabels(true);
+
       const tenantId = getTenantId();
       if (!tenantId) {
         return;
@@ -420,6 +425,61 @@ export default function ContactLeadsPage() {
     }
   };
 
+  const handleOpenDeleteLabelModal = (labelId: string) => {
+    setSelectedLabelId(labelId);
+    setIsDeleteLabelModalOpen(true);
+  };
+
+  const handleCancelDeleteLabel = () => {
+    if (isDeletingLabel) return;
+    setIsDeleteLabelModalOpen(false);
+    setSelectedLabelId(null);
+  };
+
+  const handleConfirmDeleteLabel = async () => {
+    if (!selectedLabelId) return;
+
+    try {
+      setIsDeletingLabel(true);
+      const tenantId = getTenantId();
+      if (!tenantId) {
+        setMessage({
+          text: "Please log in to delete labels.",
+          type: "error",
+        });
+        return;
+      }
+
+      const response = await axios.delete(`${LABEL_API_BASE_URL}/label/${tenantId}`, {
+        data: { labelId: selectedLabelId },
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 200) {
+        setLabels((prev) => prev.filter((label) => label.id !== selectedLabelId));
+        setMessage({ text: "Label deleted successfully.", type: "success" });
+        setIsDeleteLabelModalOpen(false);
+        setSelectedLabelId(null);
+      } else {
+        throw new Error("Failed to delete label");
+      }
+    } catch (error: any) {
+      console.error("Error deleting label:", error);
+      setMessage({
+        text:
+          error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          "Failed to delete label. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setIsDeletingLabel(false);
+    }
+  };
+
   return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6">
@@ -443,10 +503,30 @@ export default function ContactLeadsPage() {
         <div className="p-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                All Leads ({leads.length})
-              </h2>
               <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setActiveTab("leads")}
+                  className={`text-sm font-semibold border-b-2 pb-1 transition-colors ${
+                    activeTab === "leads"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
+                >
+                  All Leads ({leads.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("labels")}
+                  className={`text-sm font-semibold border-b-2 pb-1 transition-colors ${
+                    activeTab === "labels"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
+                >
+                  Labels ({labels.length})
+                </button>
+              </div>
+              <div className="flex items-center gap-4">
+
                 <button
                     onClick={handleOpenAddContactModal}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
@@ -492,38 +572,39 @@ export default function ContactLeadsPage() {
               </div>
             </div>
 
-            {loading ? (
+            {activeTab === "leads" ? (
+              loading ? (
                 <div className="flex flex-col items-center justify-center py-16">
                   <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
                   <p className="text-gray-500 dark:text-gray-400">Loading contacts...</p>
                 </div>
-            ) : (
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Name
-                      </th>
-                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Number
-                      </th>
-                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Label
-                      </th>
-                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Created
-                      </th>
-                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Action
-                      </th>
-                    </tr>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Name
+                        </th>
+                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Number
+                        </th>
+                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Label
+                        </th>
+                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Created
+                        </th>
+                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Action
+                        </th>
+                      </tr>
                     </thead>
                     <tbody>
-                    {filteredLeads.map((lead) => (
+                      {filteredLeads.map((lead) => (
                         <tr
-                            key={lead.id}
-                            className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          key={lead.id}
+                          className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
                         >
                           <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
                             {lead.name}
@@ -532,49 +613,164 @@ export default function ContactLeadsPage() {
                             {lead.number}
                           </td>
                           <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                            {lead.label 
-                              ? typeof lead.label === 'object' 
-                                ? lead.label.name 
-                                : lead.label 
-                              : 'No Label'}
+                            {lead.label
+                              ? typeof lead.label === "object"
+                                ? lead.label.name
+                                : lead.label
+                              : "No Label"}
                           </td>
                           <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                            {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : "N/A"}
+                            {lead.createdAt
+                              ? new Date(lead.createdAt).toLocaleDateString()
+                              : "N/A"}
                           </td>
                           <td className="py-4 px-6">
                             <button
-                                onClick={() => handleDelete(lead.id)}
-                                disabled={deleting === lead.id}
-                                className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Delete lead"
+                              onClick={() => handleDelete(lead.id)}
+                              disabled={deleting === lead.id}
+                              className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete lead"
                             >
                               {deleting === lead.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                  <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               )}
                             </button>
                           </td>
                         </tr>
-                    ))}
+                      ))}
                     </tbody>
                   </table>
                   {filteredLeads.length === 0 && (
-                      <div className="text-center py-16">
-                        <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
-                          {searchTerm ? "No contacts found matching your search." : "No contacts yet."}
+                    <div className="text-center py-16">
+                      <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
+                        {searchTerm
+                          ? "No contacts found matching your search."
+                          : "No contacts yet."}
+                      </p>
+                      {!searchTerm && (
+                        <p className="text-gray-400 dark:text-gray-500 text-sm">
+                          Click "Add Contact" to create your first contact.
                         </p>
-                        {!searchTerm && (
-                            <p className="text-gray-400 dark:text-gray-500 text-sm">
-                              Click "Add Contact" to create your first contact.
-                            </p>
-                        )}
-                      </div>
+                      )}
+                    </div>
                   )}
                 </div>
+              )
+            ) : (
+              <div className="overflow-x-auto">
+                {loadingLabels ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+                    <p className="text-gray-500 dark:text-gray-400">Loading labels...</p>
+                  </div>
+                ) : labels.length === 0 ? (
+                  <div className="text-center py-16">
+                    <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
+                      No labels yet.
+                    </p>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm">
+                      Click "Add Label" to create your first label.
+                    </p>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Label Name
+                        </th>
+                        <th className="text-right py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {labels.map((label) => (
+                        <tr
+                          key={label.id}
+                          className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                          <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
+                            {label.name}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <button
+                              onClick={() => handleOpenDeleteLabelModal(label.id)}
+                              disabled={isDeletingLabel && selectedLabelId === label.id}
+                              className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete label"
+                            >
+                              {isDeletingLabel && selectedLabelId === label.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             )}
           </div>
         </div>
+
+        {/* Delete Label Confirmation Modal */}
+        {isDeleteLabelModalOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={handleCancelDeleteLabel}
+            ></div>
+
+            <div className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-2xl">
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                  <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  Delete Label
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Are you sure you want to delete this label? This action cannot be undone.
+                </p>
+
+                <div className="flex justify-center gap-3">
+                  <button
+                    type="button"
+                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    onClick={handleCancelDeleteLabel}
+                    disabled={isDeletingLabel}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                    onClick={handleConfirmDeleteLabel}
+                    disabled={isDeletingLabel}
+                  >
+                    {isDeletingLabel ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add Contact Modal */}
         {isAddContactModalOpen && (

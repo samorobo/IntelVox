@@ -507,7 +507,7 @@ export default function AIAgentPage() {
             )}
           </div>
 
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               LLM Model <span className="text-red-500">*</span>
             </label>
@@ -540,7 +540,7 @@ export default function AIAgentPage() {
                 Loading LLM models...
               </p>
             )}
-          </div>
+          </div> */}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
