@@ -14,7 +14,7 @@ import Link from "next/link";
 // Dynamically import PhoneInput with SSR disabled
 const PhoneInput = dynamic(
   () => import('react-international-phone').then(mod => mod.PhoneInput),
-  { 
+  {
     ssr: false,
     loading: () => (
       <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
@@ -136,8 +136,8 @@ export default function ContactLeadsPage() {
       console.error("Error fetching contacts:", error);
       console.error("Error details:", error.response?.data);
       const errorMessage = error.message?.includes("Tenant ID not found")
-          ? "Please log in to view contacts."
-          : error.response?.data?.error || "Failed to load contacts. Please try again.";
+        ? "Please log in to view contacts."
+        : error.response?.data?.error || "Failed to load contacts. Please try again.";
       setMessage({
         text: errorMessage,
         type: "error"
@@ -155,7 +155,8 @@ export default function ContactLeadsPage() {
       if (!tenantId) {
         return;
       }
-      const response = await axios.get(`${LABEL_API_BASE_URL}/label/${tenantId}`);
+
+      const response = await axiosClient.get(`/label/${tenantId}`);
       const labelsData = response.data;
       if (Array.isArray(labelsData)) {
         const formattedLabels = labelsData.map((label: any) => {
@@ -204,19 +205,19 @@ export default function ContactLeadsPage() {
   };
 
   const filteredLeads = leads.filter(
-      (lead) => {
-        const searchTermLower = searchTerm.toLowerCase();
-        const labelText = typeof lead.label === 'string' 
-          ? lead.label 
-          : lead.label?.name || '';
-          
-        return (
-          lead.name?.toLowerCase().includes(searchTermLower) ||
-          lead.number?.toLowerCase().includes(searchTermLower) ||
-          lead.status?.toLowerCase().includes(searchTermLower) ||
-          labelText.toLowerCase().includes(searchTermLower)
-        );
-      }
+    (lead) => {
+      const searchTermLower = searchTerm.toLowerCase();
+      const labelText = typeof lead.label === 'string'
+        ? lead.label
+        : lead.label?.name || '';
+
+      return (
+        lead.name?.toLowerCase().includes(searchTermLower) ||
+        lead.number?.toLowerCase().includes(searchTermLower) ||
+        lead.status?.toLowerCase().includes(searchTermLower) ||
+        labelText.toLowerCase().includes(searchTermLower)
+      );
+    }
   );
 
   const getStatusColor = (status: Lead["status"]) => {
@@ -409,9 +410,11 @@ export default function ContactLeadsPage() {
         return;
       }
 
-      await axios.post(`${LABEL_API_BASE_URL}/label/${tenantId}`, {
-        name: trimmedLabel,
-      });
+  
+
+await axiosClient.post(`/label/${tenantId}`, {
+  name: trimmedLabel,
+});
 
       setMessage({ text: "Label added successfully!", type: "success" });
       handleCloseLabelModal();
@@ -450,12 +453,14 @@ export default function ContactLeadsPage() {
         return;
       }
 
-      const response = await axios.delete(`${LABEL_API_BASE_URL}/label/${tenantId}`, {
-        data: { labelId: selectedLabelId },
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      // const response = await axios.delete(`${LABEL_API_BASE_URL}/label/${tenantId}`, {
+      //   data: { labelId: selectedLabelId },
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      // });
+
+      const response = await axiosClient.delete(`/label/${tenantId}/${selectedLabelId}`);
 
       if (response.status === 200) {
         setLabels((prev) => prev.filter((label) => label.id !== selectedLabelId));
@@ -481,540 +486,531 @@ export default function ContactLeadsPage() {
   };
 
   return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Contact & Leads
-          </h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Contact & Leads
+        </h1>
+      </div>
+
+      {message && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-md text-sm font-medium transition-all duration-300 ${message.type === "success"
+            ? "bg-green-500 text-white"
+            : "bg-red-500 text-white"
+            }`}
+        >
+          {message.text}
         </div>
+      )}
 
-        {message && (
-            <div
-                className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-md text-sm font-medium transition-all duration-300 ${
-                    message.type === "success"
-                        ? "bg-green-500 text-white"
-                        : "bg-red-500 text-white"
-                }`}
-            >
-              {message.text}
+      <div className="p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setActiveTab("leads")}
+                className={`text-sm font-semibold border-b-2 pb-1 transition-colors ${activeTab === "leads"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
+              >
+                All Leads ({leads.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("labels")}
+                className={`text-sm font-semibold border-b-2 pb-1 transition-colors ${activeTab === "labels"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
+              >
+                Labels ({labels.length})
+              </button>
             </div>
-        )}
+            <div className="flex items-center gap-4">
 
-        <div className="p-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setActiveTab("leads")}
-                  className={`text-sm font-semibold border-b-2 pb-1 transition-colors ${
-                    activeTab === "leads"
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                  }`}
-                >
-                  All Leads ({leads.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("labels")}
-                  className={`text-sm font-semibold border-b-2 pb-1 transition-colors ${
-                    activeTab === "labels"
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                  }`}
-                >
-                  Labels ({labels.length})
-                </button>
-              </div>
-              <div className="flex items-center gap-4">
+              <button
+                onClick={handleOpenAddContactModal}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Contact
+              </button>
 
-                <button
-                    onClick={handleOpenAddContactModal}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Contact
-                </button>
+              <button
+                onClick={handleOpenLabelModal}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Label
+              </button>
 
-                <button
-                    onClick={handleOpenLabelModal}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Label
-                </button>
+              <Link
+                href="contacts/bulk-upload"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <Upload className="w-4 h-4" />
+                Bulk Upload
+              </Link>
 
-                <Link
-                    href="contacts/bulk-upload"
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  <Upload className="w-4 h-4" />
-                  Bulk Upload
-                </Link>
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
 
-                <button
-                    onClick={handleExport}
-                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  Export
-                </button>
-
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                      type="text"
-                      placeholder="Search leads..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search leads..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
               </div>
             </div>
+          </div>
 
-            {activeTab === "leads" ? (
-              loading ? (
-                <div className="flex flex-col items-center justify-center py-16">
-                  <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">Loading contacts...</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Name
-                        </th>
-                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Number
-                        </th>
-                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Label
-                        </th>
-                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Created
-                        </th>
-                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredLeads.map((lead) => (
-                        <tr
-                          key={lead.id}
-                          className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                        >
-                          <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
-                            {lead.name}
-                          </td>
-                          <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                            {lead.number}
-                          </td>
-                          <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                            {lead.label
-                              ? typeof lead.label === "object"
-                                ? lead.label.name
-                                : lead.label
-                              : "No Label"}
-                          </td>
-                          <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
-                            {lead.createdAt
-                              ? new Date(lead.createdAt).toLocaleDateString()
-                              : "N/A"}
-                          </td>
-                          <td className="py-4 px-6">
-                            <button
-                              onClick={() => handleDelete(lead.id)}
-                              disabled={deleting === lead.id}
-                              className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Delete lead"
-                            >
-                              {deleting === lead.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {filteredLeads.length === 0 && (
-                    <div className="text-center py-16">
-                      <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
-                        {searchTerm
-                          ? "No contacts found matching your search."
-                          : "No contacts yet."}
-                      </p>
-                      {!searchTerm && (
-                        <p className="text-gray-400 dark:text-gray-500 text-sm">
-                          Click "Add Contact" to create your first contact.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
+          {activeTab === "leads" ? (
+            loading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+                <p className="text-gray-500 dark:text-gray-400">Loading contacts...</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
-                {loadingLabels ? (
-                  <div className="flex flex-col items-center justify-center py-16">
-                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">Loading labels...</p>
-                  </div>
-                ) : labels.length === 0 ? (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Name
+                      </th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Number
+                      </th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Label
+                      </th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Created
+                      </th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeads.map((lead) => (
+                      <tr
+                        key={lead.id}
+                        className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
+                          {lead.name}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
+                          {lead.number}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
+                          {lead.label
+                            ? typeof lead.label === "object"
+                              ? lead.label.name
+                              : lead.label
+                            : "No Label"}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">
+                          {lead.createdAt
+                            ? new Date(lead.createdAt).toLocaleDateString()
+                            : "N/A"}
+                        </td>
+                        <td className="py-4 px-6">
+                          <button
+                            onClick={() => handleDelete(lead.id)}
+                            disabled={deleting === lead.id}
+                            className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete lead"
+                          >
+                            {deleting === lead.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredLeads.length === 0 && (
                   <div className="text-center py-16">
                     <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
-                      No labels yet.
+                      {searchTerm
+                        ? "No contacts found matching your search."
+                        : "No contacts yet."}
                     </p>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm">
-                      Click "Add Label" to create your first label.
-                    </p>
+                    {!searchTerm && (
+                      <p className="text-gray-400 dark:text-gray-500 text-sm">
+                        Click "Add Contact" to create your first contact.
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Label Name
-                        </th>
-                        <th className="text-right py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {labels.map((label) => (
-                        <tr
-                          key={label.id}
-                          className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                        >
-                          <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
-                            {label.name}
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <button
-                              onClick={() => handleOpenDeleteLabelModal(label.id)}
-                              disabled={isDeletingLabel && selectedLabelId === label.id}
-                              className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Delete label"
-                            >
-                              {isDeletingLabel && selectedLabelId === label.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 )}
               </div>
-            )}
+            )
+          ) : (
+            <div className="overflow-x-auto">
+              {loadingLabels ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">Loading labels...</p>
+                </div>
+              ) : labels.length === 0 ? (
+                <div className="text-center py-16">
+                  <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
+                    No labels yet.
+                  </p>
+                  <p className="text-gray-400 dark:text-gray-500 text-sm">
+                    Click "Add Label" to create your first label.
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Label Name
+                      </th>
+                      <th className="text-right py-4 px-6 text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {labels.map((label) => (
+                      <tr
+                        key={label.id}
+                        className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        <td className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
+                          {label.name}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <button
+                            onClick={() => handleOpenDeleteLabelModal(label.id)}
+                            disabled={isDeletingLabel && selectedLabelId === label.id}
+                            className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete label"
+                          >
+                            {isDeletingLabel && selectedLabelId === label.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Delete Label Confirmation Modal */}
+      {isDeleteLabelModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={handleCancelDeleteLabel}
+          ></div>
+
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                Delete Label
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Are you sure you want to delete this label? This action cannot be undone.
+              </p>
+
+              <div className="flex justify-center gap-3">
+                <button
+                  type="button"
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  onClick={handleCancelDeleteLabel}
+                  disabled={isDeletingLabel}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                  onClick={handleConfirmDeleteLabel}
+                  disabled={isDeletingLabel}
+                >
+                  {isDeletingLabel ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Delete Label Confirmation Modal */}
-        {isDeleteLabelModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* Add Contact Modal */}
+      {isAddContactModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={handleCloseAddContactModal}
+          ></div>
+
+          <div className="flex min-h-full items-center justify-center p-4">
             <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={handleCancelDeleteLabel}
-            ></div>
-
-            <div className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-2xl">
-              <div className="text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
-                  <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  Delete Label
+              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Add Contact
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                  Are you sure you want to delete this label? This action cannot be undone.
-                </p>
+                <button
+                  onClick={handleCloseAddContactModal}
+                  disabled={submitting}
+                  className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-                <div className="flex justify-center gap-3">
-                  <button
-                    type="button"
-                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                    onClick={handleCancelDeleteLabel}
-                    disabled={isDeletingLabel}
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={addContactFormData.name}
+                    onChange={(e) => handleAddContactInputChange("name", e.target.value)}
+                    disabled={submitting}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${addContactFormErrors.name
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 dark:border-gray-600"
+                      }`}
+                    placeholder="Enter contact name"
+                  />
+                  {addContactFormErrors.name && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {addContactFormErrors.name}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <PhoneInput
+                    defaultCountry="gb"
+                    value={addContactFormData.number}
+                    onChange={(phone) => handleAddContactInputChange("number", phone)}
+                    disabled={submitting}
+                    className={`w-full ${addContactFormErrors.number ? "phone-input-error" : ""
+                      }`}
+                    inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {addContactFormErrors.number && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {addContactFormErrors.number}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Select Label
+                  </label>
+                  <select
+                    value={addContactFormData.label}
+                    onChange={(e) => handleAddContactInputChange("label", e.target.value)}
+                    disabled={submitting || labels.length === 0 || loadingLabels}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${addContactFormErrors.label
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 dark:border-gray-600"
+                      }`}
                   >
-                    Cancel
-                  </button>
+                    <option value="">
+                      {loadingLabels ? "Loading labels..." : labels.length === 0 ? "No labels available" : "Select a label"}
+                    </option>
+                    {labels.map((label) => (
+                      <option key={label.id} value={label.id}>
+                        {label.name}
+                      </option>
+                    ))}
+                  </select>
+                  {labels.length === 0 && !loadingLabels && (
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Add a label to enable this dropdown.
+                    </p>
+                  )}
+                  {addContactFormErrors.label && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {addContactFormErrors.label}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Consent
+                  </label>
                   <button
-                    type="button"
-                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
-                    onClick={handleConfirmDeleteLabel}
-                    disabled={isDeletingLabel}
+                    onClick={() => handleAddContactInputChange("consent", !addContactFormData.consent)}
+                    disabled={submitting}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${addContactFormData.consent
+                      ? "bg-blue-600"
+                      : "bg-gray-300 dark:bg-gray-600"
+                      }`}
                   >
-                    {isDeletingLabel ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </>
-                    )}
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${addContactFormData.consent
+                        ? "translate-x-6"
+                        : "translate-x-1"
+                        }`}
+                    />
                   </button>
                 </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleCloseAddContactModal}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddContact}
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    "Add Contact"
+                  )}
+                </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Add Contact Modal */}
-        {isAddContactModalOpen && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-              <div
-                  className="fixed inset-0 bg-black/30 backdrop-blur-sm"
-                  onClick={handleCloseAddContactModal}
-              ></div>
+      {/* Add Label Modal */}
+      {isLabelModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={handleCloseLabelModal}
+          ></div>
 
-              <div className="flex min-h-full items-center justify-center p-4">
-                <div
-                    className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Add Contact
-                    </h3>
-                    <button
-                        onClick={handleCloseAddContactModal}
-                        disabled={submitting}
-                        className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="px-6 py-4 space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                          type="text"
-                          value={addContactFormData.name}
-                          onChange={(e) => handleAddContactInputChange("name", e.target.value)}
-                          disabled={submitting}
-                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              addContactFormErrors.name
-                                  ? "border-red-500 focus:ring-red-500"
-                                  : "border-gray-300 dark:border-gray-600"
-                          }`}
-                          placeholder="Enter contact name"
-                      />
-                      {addContactFormErrors.name && (
-                          <p className="mt-1 text-sm text-red-500">
-                            {addContactFormErrors.name}
-                          </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Phone Number <span className="text-red-500">*</span>
-                      </label>
-                      <PhoneInput
-                          defaultCountry="gb"
-                          value={addContactFormData.number}
-                          onChange={(phone) => handleAddContactInputChange("number", phone)}
-                          disabled={submitting}
-                          className={`w-full ${
-                              addContactFormErrors.number ? "phone-input-error" : ""
-                          }`}
-                          inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      {addContactFormErrors.number && (
-                          <p className="mt-1 text-sm text-red-500">
-                            {addContactFormErrors.number}
-                          </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Select Label
-                      </label>
-                      <select
-                          value={addContactFormData.label}
-                          onChange={(e) => handleAddContactInputChange("label", e.target.value)}
-                          disabled={submitting || labels.length === 0 || loadingLabels}
-                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              addContactFormErrors.label
-                                  ? "border-red-500 focus:ring-red-500"
-                                  : "border-gray-300 dark:border-gray-600"
-                          }`}
-                      >
-                        <option value="">
-                          {loadingLabels ? "Loading labels..." : labels.length === 0 ? "No labels available" : "Select a label"}
-                        </option>
-                        {labels.map((label) => (
-                            <option key={label.id} value={label.id}>
-                              {label.name}
-                            </option>
-                        ))}
-                      </select>
-                      {labels.length === 0 && !loadingLabels && (
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            Add a label to enable this dropdown.
-                          </p>
-                      )}
-                      {addContactFormErrors.label && (
-                          <p className="mt-1 text-sm text-red-500">
-                            {addContactFormErrors.label}
-                          </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Consent
-                      </label>
-                      <button
-                          onClick={() => handleAddContactInputChange("consent", !addContactFormData.consent)}
-                          disabled={submitting}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              addContactFormData.consent
-                                  ? "bg-blue-600"
-                                  : "bg-gray-300 dark:bg-gray-600"
-                          }`}
-                      >
-                    <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            addContactFormData.consent
-                                ? "translate-x-6"
-                                : "translate-x-1"
-                        }`}
-                    />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 mt-6 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                    <button
-                        onClick={handleCloseAddContactModal}
-                        disabled={submitting}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                        onClick={handleAddContact}
-                        disabled={submitting}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Adding...
-                          </>
-                      ) : (
-                          "Add Contact"
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-        )}
-
-        {/* Add Label Modal */}
-        {isLabelModalOpen && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-              <div
-                  className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Add Label
+                </h3>
+                <button
                   onClick={handleCloseLabelModal}
-              ></div>
-
-              <div className="flex min-h-full items-center justify-center p-4">
-                <div
-                    className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md"
-                    onClick={(e) => e.stopPropagation()}
+                  className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                 >
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Add Label
-                    </h3>
-                    <button
-                        onClick={handleCloseLabelModal}
-                        className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-                  <div className="px-6 py-4 space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Label Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                          type="text"
-                          value={newLabelName}
-                          onChange={(e) => {
-                            setNewLabelName(e.target.value);
-                            if (labelError) {
-                              setLabelError(null);
-                            }
-                          }}
-                          disabled={submitting}
-                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              labelError
-                                  ? "border-red-500 focus:ring-red-500"
-                                  : "border-gray-300 dark:border-gray-600"
-                          }`}
-                          placeholder="Enter label name"
-                      />
-                      {labelError && (
-                          <p className="mt-1 text-sm text-red-500">
-                            {labelError}
-                          </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                    <button
-                        onClick={handleCloseLabelModal}
-                        disabled={submitting}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                        onClick={handleAddLabel}
-                        disabled={submitting}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Adding...
-                          </>
-                      ) : (
-                          <>
-                            <Plus className="w-4 h-4" />
-                            Add Label
-                          </>
-                      )}
-                    </button>
-                  </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Label Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newLabelName}
+                    onChange={(e) => {
+                      setNewLabelName(e.target.value);
+                      if (labelError) {
+                        setLabelError(null);
+                      }
+                    }}
+                    disabled={submitting}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${labelError
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 dark:border-gray-600"
+                      }`}
+                    placeholder="Enter label name"
+                  />
+                  {labelError && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {labelError}
+                    </p>
+                  )}
                 </div>
               </div>
+
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleCloseLabelModal}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddLabel}
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Add Label
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

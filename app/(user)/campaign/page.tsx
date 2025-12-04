@@ -50,6 +50,7 @@ interface Campaign {
 interface AIAgent {
   id: string;
   name: string;
+  type: string;
 }
 
 interface Label {
@@ -831,11 +832,21 @@ export default function CampaignsPage() {
                         }`}
                       >
                         <option value="">Select AI agent</option>
-                        {aiAgents.map((agent) => (
-                          <option key={agent.id} value={agent.id}>
-                            {agent.name}
-                          </option>
-                        ))}
+                        {aiAgents
+                          .filter((agent) => {
+                            // Filter agents based on campaign type
+                            if (campaignType === "inbound") {
+                              return agent.type === "inbound";
+                            } else if (campaignType === "outbound") {
+                              return agent.type === "outbound";
+                            }
+                            return true;
+                          })
+                          .map((agent) => (
+                            <option key={agent.id} value={agent.id}>
+                              {agent.name}
+                            </option>
+                          ))}
                       </select>
                       {formErrors.agent && (
                         <p className="mt-1 text-sm text-red-500">
