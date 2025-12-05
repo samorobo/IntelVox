@@ -83,6 +83,12 @@ export default function CampaignsPage() {
   const [formErrors, setFormErrors] = useState<any>({});
   const [viewLoading, setViewLoading] = useState(false);
 
+
+const [selectedStatus, setSelectedStatus] = useState<Campaign["status"] | "">("");
+const [statusUpdating, setStatusUpdating] = useState(false);
+
+
+
   const itemsPerPage = 5;
 
   // Fetch campaigns, agents, and labels on component mount
@@ -175,6 +181,7 @@ export default function CampaignsPage() {
       };
 
       setViewCampaign(formatted);
+      setSelectedStatus(formatted.status);
     } catch (error: any) {
       console.error("Error fetching campaign details:", error);
       toast.error(
@@ -319,23 +326,84 @@ export default function CampaignsPage() {
     return Object.keys(errors).length === 0;
   };
 
+
+
+  const handleUpdateCampaignStatus = async () => {
+  if (!viewCampaign || !selectedStatus) return;
+  
+  try {
+    setStatusUpdating(true);
+    const tenantId = getTenantIdOrThrow();
+    
+    await axiosClient.patch(
+      `/campaign/${tenantId}/${viewCampaign.id}/status`,
+      { status: selectedStatus }
+    );
+    
+    setViewCampaign({ ...viewCampaign, status: selectedStatus });
+    setCampaigns((prev) =>
+      prev.map((campaign) =>
+        campaign.id === viewCampaign.id
+          ? { ...campaign, status: selectedStatus }
+          : campaign
+      )
+    );
+    
+    toast.success("Campaign status updated successfully");
+  } catch (error: any) {
+    console.error("Error updating campaign status:", error);
+    toast.error(
+      error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to update campaign status"
+    );
+  } finally {
+    setStatusUpdating(false);
+  }
+};
+
+
+
+  // const handleStartCall = async (campaignId: string) => {
+  //   try {
+  //     const tenantId = getTenantIdOrThrow();
+  //     const response = await axiosClient.post(`/call/${tenantId}/outbound`, {
+  //       campaignId,
+  //     });
+  //     toast.success("Outbound call started successfully");
+  //     console.log("Call response:", response.data);
+  //   } catch (error: any) {
+  //     console.error("Error starting outbound call:", error);
+  //     toast.error(
+  //       error?.response?.data?.error ||
+  //         error?.response?.data?.message ||
+  //         "Failed to start outbound call"
+  //     );
+  //   }
+  // };
+
+
   const handleStartCall = async (campaignId: string) => {
-    try {
-      const tenantId = getTenantIdOrThrow();
-      const response = await axiosClient.post(`/call/${tenantId}/outbound`, {
-        campaignId,
-      });
-      toast.success("Outbound call started successfully");
-      console.log("Call response:", response.data);
-    } catch (error: any) {
-      console.error("Error starting outbound call:", error);
-      toast.error(
-        error?.response?.data?.error ||
-          error?.response?.data?.message ||
-          "Failed to start outbound call"
-      );
-    }
-  };
+  toast.success("Call initiated! Your outbound call is being processed.", {
+    duration: 5000,
+  });
+  
+  try {
+    const tenantId = getTenantIdOrThrow();
+    const response = await axiosClient.post(`/call/${tenantId}/outbound`, {
+      campaignId,
+    });
+    console.log("Call response:", response.data);
+  } catch (error: any) {
+    console.error("Error starting outbound call:", error);
+    toast.error(
+      error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to start outbound call"
+    );
+  }
+};
+
 
   const handleCreateCampaign = async () => {
     if (!validateForm()) return;
@@ -599,7 +667,7 @@ export default function CampaignsPage() {
                     {viewCampaign.type} Campaign
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                {/* <div className="flex items-center gap-3">
                   {viewCampaign.type === "Outbound" && (
     <button
       type="button"
@@ -616,7 +684,49 @@ export default function CampaignsPage() {
                   >
                     <X className="w-6 h-6" />
                   </button>
-                </div>
+                </div> */}
+
+
+                <div className="flex items-center gap-3">
+  {viewCampaign.type === "Outbound" && (
+    <>
+      <select
+        value={selectedStatus}
+        onChange={(e) => setSelectedStatus(e.target.value as Campaign["status"])}
+        disabled={statusUpdating}
+        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+      >
+        <option value="Active">Active</option>
+        <option value="Inactive">Inactive</option>
+        <option value="Suspended">Suspended</option>
+        <option value="Scheduled">Scheduled</option>
+      </select>
+      <button
+        onClick={handleUpdateCampaignStatus}
+        disabled={statusUpdating || !selectedStatus}
+        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+      >
+        {statusUpdating ? "Saving..." : "Save Status"}
+      </button>
+      <button
+        type="button"
+        onClick={() => handleStartCall(viewCampaign.id)}
+        disabled={viewCampaign.status !== "Active"}
+        className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+        title={viewCampaign.status === "Active" ? "Start outbound call" : "Campaign must be Active to start calls"}
+      >
+        <Phone className="w-4 h-4" />
+      </button>
+    </>
+  )}
+  <button
+    onClick={() => setViewCampaign(null)}
+    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+  >
+    <X className="w-6 h-6" />
+  </button>
+</div>
+
               </div>
               <div className="px-8 py-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
