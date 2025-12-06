@@ -28,7 +28,7 @@ interface Campaign {
   agentId: string;
   startDate: string;
   endDate: string;
-  status: "Active" | "Scheduled" | "Completed" | "Paused";
+  status: "Active" | "Inactive" | "Suspended" | "Scheduled";
   description?: string;
   labelId?: string;
   totalCalls?: string; // Stored as String in Prisma schema
@@ -84,8 +84,8 @@ export default function CampaignsPage() {
   const [viewLoading, setViewLoading] = useState(false);
 
 
-const [selectedStatus, setSelectedStatus] = useState<Campaign["status"] | "">("");
-const [statusUpdating, setStatusUpdating] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
 
 
@@ -161,7 +161,8 @@ const [statusUpdating, setStatusUpdating] = useState(false);
         aiAgent: data.agent?.name || "",
         startDate: data.startDate,
         endDate: data.endDate,
-        status: data.status,
+        // Convert backend lowercase status to PascalCase for frontend
+        status: (data.status.charAt(0).toUpperCase() + data.status.slice(1)) as Campaign["status"],
         description: data.description,
         labelId: data.labelId,
         totalCalls: data.totalCalls ?? "0",
@@ -181,13 +182,14 @@ const [statusUpdating, setStatusUpdating] = useState(false);
       };
 
       setViewCampaign(formatted);
-      setSelectedStatus(formatted.status);
+      // Store lowercase for dropdown (backend sends lowercase)
+      setSelectedStatus(data.status.toLowerCase());
     } catch (error: any) {
       console.error("Error fetching campaign details:", error);
       toast.error(
         error?.response?.data?.error ||
-          error?.response?.data?.message ||
-          "Failed to load campaign details"
+        error?.response?.data?.message ||
+        "Failed to load campaign details"
       );
     } finally {
       setViewLoading(false);
@@ -271,12 +273,13 @@ const [statusUpdating, setStatusUpdating] = useState(false);
   );
 
   const getStatusColor = (status: Campaign["status"]) =>
-    ({
-      Active: "bg-green-100 text-green-800",
-      Scheduled: "bg-yellow-100 text-yellow-800",
-      Completed: "bg-purple-100 text-purple-800",
-      Paused: "bg-gray-100 text-gray-800",
-    }[status]);
+  ({
+    Active: "bg-green-100 text-green-800",
+    Scheduled: "bg-yellow-100 text-yellow-800",
+    Inactive: "bg-gray-100 text-gray-800",
+    Suspended: "bg-red-100 text-red-800",
+  }[status]);
+
 
   const handleCloseModal = () => {
     if (!submitting) {
@@ -329,38 +332,53 @@ const [statusUpdating, setStatusUpdating] = useState(false);
 
 
   const handleUpdateCampaignStatus = async () => {
-  if (!viewCampaign || !selectedStatus) return;
-  
-  try {
-    setStatusUpdating(true);
-    const tenantId = getTenantIdOrThrow();
-    
-    await axiosClient.patch(
-      `/campaign/${tenantId}/${viewCampaign.id}/status`,
-      { status: selectedStatus }
-    );
-    
-    setViewCampaign({ ...viewCampaign, status: selectedStatus });
-    setCampaigns((prev) =>
-      prev.map((campaign) =>
-        campaign.id === viewCampaign.id
-          ? { ...campaign, status: selectedStatus }
-          : campaign
-      )
-    );
-    
-    toast.success("Campaign status updated successfully");
-  } catch (error: any) {
-    console.error("Error updating campaign status:", error);
-    toast.error(
-      error?.response?.data?.error ||
+    if (!viewCampaign || !selectedStatus) return;
+
+    // Store previous status for rollback on error
+    const previousStatus = viewCampaign.status.toLowerCase();
+
+    try {
+      setStatusUpdating(true);
+      const tenantId = getTenantIdOrThrow();
+
+      // Send lowercase status to backend
+      await axiosClient.patch(
+        `/campaign/${tenantId}/${viewCampaign.id}/status`,
+        { status: selectedStatus.toLowerCase() }
+      );
+
+      // Convert to PascalCase for frontend state
+      const capitalizedStatus = selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1);
+
+      // Update the viewCampaign state with new status
+      setViewCampaign({ ...viewCampaign, status: capitalizedStatus as Campaign["status"] });
+
+      // Update the campaigns list as well
+      setCampaigns((prev) =>
+        prev.map((campaign) =>
+          campaign.id === viewCampaign.id
+            ? { ...campaign, status: capitalizedStatus as Campaign["status"] }
+            : campaign
+        )
+      );
+
+      toast.success("Campaign status updated successfully");
+    } catch (error: any) {
+      console.error("Error updating campaign status:", error);
+
+      // Revert dropdown to previous value on error
+      setSelectedStatus(previousStatus);
+
+      toast.error(
+        error?.response?.data?.error ||
         error?.response?.data?.message ||
         "Failed to update campaign status"
-    );
-  } finally {
-    setStatusUpdating(false);
-  }
-};
+      );
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
 
 
 
@@ -384,25 +402,26 @@ const [statusUpdating, setStatusUpdating] = useState(false);
 
 
   const handleStartCall = async (campaignId: string) => {
-  toast.success("Call initiated! Your outbound call is being processed.", {
-    duration: 5000,
-  });
-  
-  try {
-    const tenantId = getTenantIdOrThrow();
-    const response = await axiosClient.post(`/call/${tenantId}/outbound`, {
-      campaignId,
+    toast.success("Call initiated! Your outbound call is being processed.", {
+      duration: 5000,
     });
-    console.log("Call response:", response.data);
-  } catch (error: any) {
-    console.error("Error starting outbound call:", error);
-    toast.error(
-      error?.response?.data?.error ||
+
+    try {
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.post(`/call/${tenantId}/outbound`, {
+        campaignId,
+      });
+      console.log("Call response:", response.data);
+    } catch (error: any) {
+      console.error("Error starting outbound call:", error);
+      toast.error(
+        error?.response?.data?.error ||
         error?.response?.data?.message ||
         "Failed to start outbound call"
-    );
-  }
-};
+      );
+    }
+  };
+
 
 
   const handleCreateCampaign = async () => {
@@ -459,8 +478,8 @@ const [statusUpdating, setStatusUpdating] = useState(false);
       console.error("Error saving campaign:", error);
       toast.error(
         error.response?.data?.error ||
-          error.response?.data?.message ||
-          "Failed to save campaign"
+        error.response?.data?.message ||
+        "Failed to save campaign"
       );
     } finally {
       setSubmitting(false);
@@ -623,11 +642,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
               <button
                 key={page}
                 onClick={() => setCurrentPage(page)}
-                className={`px-3 py-1 text-sm rounded ${
-                  currentPage === page
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600"
-                }`}
+                className={`px-3 py-1 text-sm rounded ${currentPage === page
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600"
+                  }`}
               >
                 {page}
               </button>
@@ -658,11 +676,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
                     {viewCampaign.name}
                   </h2>
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${
-                      viewCampaign.type === "Inbound"
-                        ? "bg-blue-50 text-blue-700 border border-blue-100"
-                        : "bg-purple-50 text-purple-700 border border-purple-100"
-                    }`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${viewCampaign.type === "Inbound"
+                      ? "bg-blue-50 text-blue-700 border border-blue-100"
+                      : "bg-purple-50 text-purple-700 border border-purple-100"
+                      }`}
                   >
                     {viewCampaign.type} Campaign
                   </span>
@@ -688,44 +705,46 @@ const [statusUpdating, setStatusUpdating] = useState(false);
 
 
                 <div className="flex items-center gap-3">
-  {viewCampaign.type === "Outbound" && (
-    <>
-      <select
-        value={selectedStatus}
-        onChange={(e) => setSelectedStatus(e.target.value as Campaign["status"])}
-        disabled={statusUpdating}
-        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-      >
-        <option value="Active">Active</option>
-        <option value="Inactive">Inactive</option>
-        <option value="Suspended">Suspended</option>
-        <option value="Scheduled">Scheduled</option>
-      </select>
-      <button
-        onClick={handleUpdateCampaignStatus}
-        disabled={statusUpdating || !selectedStatus}
-        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-      >
-        {statusUpdating ? "Saving..." : "Save Status"}
-      </button>
-      <button
-        type="button"
-        onClick={() => handleStartCall(viewCampaign.id)}
-        disabled={viewCampaign.status !== "Active"}
-        className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-        title={viewCampaign.status === "Active" ? "Start outbound call" : "Campaign must be Active to start calls"}
-      >
-        <Phone className="w-4 h-4" />
-      </button>
-    </>
-  )}
-  <button
-    onClick={() => setViewCampaign(null)}
-    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-  >
-    <X className="w-6 h-6" />
-  </button>
-</div>
+                  {viewCampaign.type === "Outbound" && (
+                    <>
+                      <select
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        disabled={statusUpdating}
+                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="scheduled">Scheduled</option>
+                      </select>
+                      <button
+                        onClick={handleUpdateCampaignStatus}
+                        disabled={statusUpdating || !selectedStatus}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                      >
+                        {statusUpdating && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {statusUpdating ? "Saving..." : "Save Status"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStartCall(viewCampaign.id)}
+                        disabled={viewCampaign.status !== "Active"}
+                        className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        title={viewCampaign.status === "Active" ? "Start outbound call" : "Campaign must be Active to start calls"}
+                      >
+                        <Phone className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setViewCampaign(null)}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
 
               </div>
               <div className="px-8 py-6">
@@ -911,11 +930,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
                           setFormData({ ...formData, name: e.target.value })
                         }
                         disabled={submitting}
-                        className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          formErrors.name
-                            ? "border-red-500"
-                            : "border-gray-300 dark:border-gray-600"
-                        }`}
+                        className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.name
+                          ? "border-red-500"
+                          : "border-gray-300 dark:border-gray-600"
+                          }`}
                         placeholder="Enter campaign name"
                       />
                       {formErrors.name && (
@@ -935,11 +953,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
                           setFormData({ ...formData, agent: e.target.value })
                         }
                         disabled={submitting}
-                        className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          formErrors.agent
-                            ? "border-red-500"
-                            : "border-gray-300 dark:border-gray-600"
-                        }`}
+                        className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.agent
+                          ? "border-red-500"
+                          : "border-gray-300 dark:border-gray-600"
+                          }`}
                       >
                         <option value="">Select AI agent</option>
                         {aiAgents
@@ -979,11 +996,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
                             })
                           }
                           disabled={submitting}
-                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            formErrors.startDate
-                              ? "border-red-500"
-                              : "border-gray-300 dark:border-gray-600"
-                          }`}
+                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.startDate
+                            ? "border-red-500"
+                            : "border-gray-300 dark:border-gray-600"
+                            }`}
                         />
                         {formErrors.startDate && (
                           <p className="mt-1 text-sm text-red-500">
@@ -1005,11 +1021,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
                             })
                           }
                           disabled={submitting}
-                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            formErrors.endDate
-                              ? "border-red-500"
-                              : "border-gray-300 dark:border-gray-600"
-                          }`}
+                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.endDate
+                            ? "border-red-500"
+                            : "border-gray-300 dark:border-gray-600"
+                            }`}
                         />
                         {formErrors.endDate && (
                           <p className="mt-1 text-sm text-red-500">
@@ -1029,11 +1044,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
                             setFormData({ ...formData, label: e.target.value })
                           }
                           disabled={submitting}
-                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            formErrors.label
-                              ? "border-red-500"
-                              : "border-gray-300 dark:border-gray-600"
-                          }`}
+                          className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.label
+                            ? "border-red-500"
+                            : "border-gray-300 dark:border-gray-600"
+                            }`}
                         >
                           <option value="">Select label</option>
                           {labels.map((label) => (
@@ -1063,11 +1077,10 @@ const [statusUpdating, setStatusUpdating] = useState(false);
                         }
                         disabled={submitting}
                         rows={4}
-                        className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
-                          formErrors.description
-                            ? "border-red-500"
-                            : "border-gray-300 dark:border-gray-600"
-                        }`}
+                        className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${formErrors.description
+                          ? "border-red-500"
+                          : "border-gray-300 dark:border-gray-600"
+                          }`}
                         placeholder="Enter description"
                       />
                       {formErrors.description && (
