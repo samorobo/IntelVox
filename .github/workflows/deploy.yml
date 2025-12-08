@@ -29,6 +29,18 @@ jobs:
 
             FRONTEND_DIR="/var/www/developmentsite.space/intelvox_frontend"
 
+            echo "🧠 Checking & enabling swap memory (prevents OOM 137)..."
+            if ! grep -q "swapfile" /etc/fstab; then
+              sudo fallocate -l 4G /swapfile
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+              echo "✅ Swap memory enabled (4GB)"
+            else
+              echo "ℹ️ Swap already active"
+            fi
+
             echo "📁 Cleaning old deployment..."
             rm -rf $FRONTEND_DIR
 
@@ -37,7 +49,10 @@ jobs:
             cd $FRONTEND_DIR
             git checkout $GITHUB_SHA
 
-            echo "⚡ Installing dependencies (cached if possible)..."
+            echo "⚙️ Setting Node memory limit (fixes heavy Next.js builds)"
+            export NODE_OPTIONS="--max-old-space-size=4096"
+
+            echo "⚡ Installing dependencies..."
             npm install --prefer-offline --no-audit
 
             echo "🔧 Writing environment variables..."
@@ -52,7 +67,7 @@ jobs:
             pm2 stop intelvox_frontend 2>/dev/null || true
             pm2 delete intelvox_frontend 2>/dev/null || true
 
-            # Silent PM2 start to avoid SSH hang
+            # Silent PM2 start to avoid ssh hanging
             pm2 start npm --name "intelvox_frontend" \
               --cwd $FRONTEND_DIR -- start --silent >> /var/log/intelvox_frontend.log 2>&1
 
