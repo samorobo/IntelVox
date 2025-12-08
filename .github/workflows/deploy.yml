@@ -24,7 +24,7 @@ jobs:
       - name: 🧹 Clean previous build
         run: rm -rf .next
 
-      - name: 🧱 Build Next.js (on GitHub, not on VPS!)
+      - name: 🧱 Build Next.js (on GitHub)
         env:
           NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
         run: |
@@ -34,10 +34,19 @@ jobs:
       - name: 📦 Package deployment bundle
         run: |
           mkdir deploy_bundle
-          cp -R .next package.json public next.config.js deploy_bundle/
+          cp -R .next public package.json deploy_bundle/
+
+          # only copy next config if it exists
+          if [ -f next.config.js ]; then
+            cp next.config.js deploy_bundle/
+          fi
+          if [ -f next.config.mjs ]; then
+            cp next.config.mjs deploy_bundle/
+          fi
+
           tar -czf deploy.tar.gz deploy_bundle
 
-      - name: 📤 Upload build artifact for deployment
+      - name: 📤 Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: nextjs-build
@@ -49,12 +58,12 @@ jobs:
     needs: build
 
     steps:
-      - name: 📥 Download build artifact
+      - name: 📥 Download artifact
         uses: actions/download-artifact@v4
         with:
           name: nextjs-build
 
-      - name: 🚀 Deploy to VPS
+      - name: 📤 Upload artifact to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.HOST }}
@@ -62,11 +71,11 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           source: "deploy.tar.gz"
-          target: "/tmp/deploy.tar.gz"
-          timeout: 60s
-          command_timeout: 60s
+          target: "/tmp/"
+          timeout: 120s
+          command_timeout: 120s
 
-      - name: 🔧 Extract and start deployment
+      - name: 🚀 Extract and deploy
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.HOST }}
@@ -77,17 +86,16 @@ jobs:
           command_timeout: 600s
           script: |
             set -e
-            echo "🚀 Starting deployment..."
-
             FRONTEND_DIR="/var/www/developmentsite.space/intelvox_frontend"
 
-            echo "📁 Creating deployment folder..."
+            echo "📁 Preparing deployment folder..."
+            rm -rf $FRONTEND_DIR
             mkdir -p $FRONTEND_DIR
 
-            echo "📦 Extracting build artifact..."
+            echo "📦 Extracting build..."
             tar -xzf /tmp/deploy.tar.gz -C $FRONTEND_DIR --strip-components=1
 
-            echo "📝 Setting environment variables..."
+            echo "📝 Writing .env.local"
             cat > $FRONTEND_DIR/.env.local <<EOF
             NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
             EOF
@@ -108,7 +116,7 @@ jobs:
                 echo "✅ Deployment successful at $(date)"
                 exit 0
               fi
-              echo "Waiting for server... ($i/15)"
+              echo "Waiting... ($i/15)"
               sleep 2
             done
 
