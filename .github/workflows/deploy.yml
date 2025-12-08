@@ -55,57 +55,63 @@ jobs:
           name: nextjs-build
 
       - name: 🚀 Deploy to VPS
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          FRONTEND_DIR: "/var/www/developmentsite.space/intelvox_frontend"
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          timeout: 1200s
-          command_timeout: 1200s
+          source: "deploy.tar.gz"
+          target: "/tmp/deploy.tar.gz"
+          timeout: 60s
+          command_timeout: 60s
+
+      - name: 🔧 Extract and start deployment
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 600s
+          command_timeout: 600s
           script: |
             set -e
-            echo "🚀 Starting ultra-optimized deployment..."
+            echo "🚀 Starting deployment..."
 
             FRONTEND_DIR="/var/www/developmentsite.space/intelvox_frontend"
 
-            echo "📁 Resetting deployment folder..."
-            rm -rf $FRONTEND_DIR
+            echo "📁 Creating deployment folder..."
             mkdir -p $FRONTEND_DIR
 
-            echo "📦 Uploading build artifact..."
-            cat > /tmp/deploy.tar.gz << 'EOF'
-$(base64 -w0 deploy.tar.gz)
-EOF
+            echo "📦 Extracting build artifact..."
+            tar -xzf /tmp/deploy.tar.gz -C $FRONTEND_DIR --strip-components=1
 
-            base64 -d /tmp/deploy.tar.gz > /tmp/deploy.tar.gz.b64
-            tar -xzf /tmp/deploy.tar.gz.b64 -C $FRONTEND_DIR
-
-            echo "📝 Writing .env.local"
+            echo "📝 Setting environment variables..."
             cat > $FRONTEND_DIR/.env.local <<EOF
-NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
-EOF
+            NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+            EOF
 
-            echo "♻ Restarting PM2..."
+            echo "♻️ Restarting PM2..."
             pm2 stop intelvox_frontend 2>/dev/null || true
             pm2 delete intelvox_frontend 2>/dev/null || true
+            sleep 2
 
-            pm2 start "npx serve -s $FRONTEND_DIR" --name intelvox_frontend
+            cd $FRONTEND_DIR
+            pm2 start npm --name intelvox_frontend -- start
             pm2 save
 
             echo "🔍 Health check..."
-            sleep 3
-            for i in {1..10}; do
+            sleep 5
+            for i in {1..15}; do
               if curl -sf http://localhost:3000 >/dev/null; then
                 echo "✅ Deployment successful at $(date)"
                 exit 0
               fi
-              echo "Waiting for server to boot... ($i/10)"
+              echo "Waiting for server... ($i/15)"
               sleep 2
             done
 
             echo "❌ Health check failed"
-            pm2 logs intelvox_frontend --lines 20
+            pm2 logs intelvox_frontend --lines 30
             exit 1
