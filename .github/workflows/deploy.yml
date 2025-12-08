@@ -1,4 +1,4 @@
-name: Deploy Frontend (Fast Git Clone)
+name: Deploy Frontend (Optimized)
 
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy on VPS (Direct Git Clone)
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -20,64 +20,56 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          timeout: 60s
-          command_timeout: 600s
+          timeout: 1800s
+          command_timeout: 1800s
           envs: GITHUB_TOKEN,GITHUB_SHA,REPO_NAME
           script: |
             set -e
-            echo "🚀 Fast frontend deployment starting..."
-            
-            # Clean up any failed previous deployments
-            rm -rf /var/www/developmentsite.space/intelvox_frontend_new 2>/dev/null || true
-            
-            # Clone fresh code with token authentication
-            mkdir -p /var/www/developmentsite.space
-            cd /var/www/developmentsite.space
-            echo "Cloning repository..."
-            git clone https://x-access-token:$GITHUB_TOKEN@github.com/$REPO_NAME.git intelvox_frontend_new
-            cd intelvox_frontend_new
+            echo "🚀 Optimized frontend deployment started..."
+
+            FRONTEND_DIR="/var/www/developmentsite.space/intelvox_frontend"
+
+            echo "📁 Cleaning old deployment..."
+            rm -rf $FRONTEND_DIR
+
+            echo "📥 Cloning repository..."
+            git clone https://x-access-token:$GITHUB_TOKEN@github.com/$REPO_NAME.git $FRONTEND_DIR
+            cd $FRONTEND_DIR
             git checkout $GITHUB_SHA
-            echo "✅ Code cloned successfully"
-            
-            # Install dependencies and build
-            echo "Installing dependencies..."
-            npm ci
-            
-            # Create environment file for Next.js
+
+            echo "⚡ Installing dependencies (cached if possible)..."
+            npm install --prefer-offline --no-audit
+
+            echo "🔧 Writing environment variables..."
             cat > .env.local <<EOF
             NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
             EOF
-            
-            echo "Building application..."
+
+            echo "🏗️ Building Next.js application..."
             npm run build
-            echo "✅ Build completed"
-            
-            # Atomic swap
-            if [ -d "/var/www/developmentsite.space/intelvox_frontend" ]; then
-              rm -rf /var/www/developmentsite.space/intelvox_frontend_old 2>/dev/null || true
-              mv /var/www/developmentsite.space/intelvox_frontend /var/www/developmentsite.space/intelvox_frontend_old
-            fi
-            mv /var/www/developmentsite.space/intelvox_frontend_new /var/www/developmentsite.space/intelvox_frontend
-            
-            # Restart PM2
+
+            echo "♻ Restarting PM2..."
             pm2 stop intelvox_frontend 2>/dev/null || true
             pm2 delete intelvox_frontend 2>/dev/null || true
-            pm2 start npm --name "intelvox_frontend" --cwd /var/www/developmentsite.space/intelvox_frontend -- start
+
+            # Silent PM2 start to avoid SSH hang
+            pm2 start npm --name "intelvox_frontend" \
+              --cwd $FRONTEND_DIR -- start --silent >> /var/log/intelvox_frontend.log 2>&1
+
             pm2 save
-            
-            # Health check
-            echo "⏳ Starting health check..."
+
+            echo "🔍 Performing health check..."
             sleep 3
-            
-            for i in {1..5}; do
+
+            for i in {1..10}; do
               if curl -sf http://localhost:3000 >/dev/null; then
-                echo "✅ Deployment successful in $(date)!"
+                echo "✅ Deployment successful at $(date)"
                 exit 0
               fi
-              echo "Waiting... ($i/5)"
-              sleep 4
+              echo "Waiting for app to boot... ($i/10)"
+              sleep 3
             done
-            
+
             echo "❌ Health check failed"
-            pm2 logs intelvox_frontend --lines 15
+            pm2 logs intelvox_frontend --lines 20
             exit 1
