@@ -10,6 +10,16 @@ import {
   Database,
   Shield,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import axiosClient from "@/lib/axiosClient";
+
+interface Voice {
+  id: string;
+  name: string;
+  description: string;
+  gender: string;
+  accent: string;
+}
 
 interface AgentDetailsModalProps {
   agent: any;
@@ -22,6 +32,31 @@ export default function AgentDetailsModal({
   isOpen,
   onClose,
 }: AgentDetailsModalProps) {
+  const [voiceDetails, setVoiceDetails] = useState<Voice | null>(null);
+  const [loadingVoice, setLoadingVoice] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !agent?.voice) return;
+
+    const fetchVoiceDetails = async () => {
+      try {
+        setLoadingVoice(true);
+        const response = await axiosClient.get('/api/voices');
+        const voices = response.data.data.voices || [];
+        const voice = voices.find((v: Voice) => v.id === agent.voice);
+        if (voice) {
+          setVoiceDetails(voice);
+        }
+      } catch (error) {
+        console.error('Error fetching voice details:', error);
+      } finally {
+        setLoadingVoice(false);
+      }
+    };
+
+    fetchVoiceDetails();
+  }, [isOpen, agent?.voice]);
+
   if (!isOpen) return null;
 
   const getStatusColor = (status: string) => {
@@ -114,12 +149,29 @@ export default function AgentDetailsModal({
                     <div className="flex items-center gap-2 mb-2">
                       <Volume2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                       <h4 className="font-semibold text-gray-900 dark:text-white">
-                        Voice
+                        {voiceDetails?.name || 'Voice'}
                       </h4>
                     </div>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300 capitalize">
-                      {agent.voice}
-                    </span>
+                    {loadingVoice ? (
+                      <div className="animate-pulse flex space-x-4">
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                      </div>
+                    ) : voiceDetails ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300 capitalize">
+                            {voiceDetails.name} - {voiceDetails.accent}
+                          </span>
+                        </div>
+                        {voiceDetails.description && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                            {voiceDetails.description}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-500 dark:text-gray-400">No voice selected</span>
+                    )}
                   </div>
 
                   <div className="bg-white/80 dark:bg-gray-800/80 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50 shadow-sm">

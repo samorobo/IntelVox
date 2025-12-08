@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import DashboardHeader from "@/components/DashboardHeader";
-import { Search, Download, Eye } from "lucide-react";
+import { Search, Download, Eye, Trash2 } from "lucide-react";
 import Link from "next/link";
 import axiosClient from "@/lib/axiosClient";
 import { getTenantIdOrThrow } from "@/lib/utils";
@@ -34,6 +34,9 @@ export default function CallsTranscriptPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchCalls();
@@ -67,6 +70,53 @@ export default function CallsTranscriptPage() {
 
   const handleExport = () => {
     console.log("Exporting calls data...");
+  };
+
+  const handleDeleteClick = (callId: string) => {
+    setSelectedCallId(callId);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedCallId) return;
+    
+    try {
+      setIsDeleting(true);
+      setError(null);
+      
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.delete(`/calls/${tenantId}`, {
+        data: { callId: selectedCallId },
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.status === 200) {
+        // Remove the deleted call from the list
+        setCalls(prevCalls => prevCalls.filter(call => call.id !== selectedCallId));
+        setDeleteModalOpen(false);
+        // Show success message
+        console.log("Call deleted successfully");
+      } else {
+        throw new Error("Failed to delete call");
+      }
+    } catch (err: any) {
+      console.error("Error deleting call:", err);
+      setError(
+        err?.response?.data?.message || 
+        err?.message || 
+        "Failed to delete call. Please try again."
+      );
+    } finally {
+      setIsDeleting(false);
+      setSelectedCallId(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteModalOpen(false);
+    setSelectedCallId(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -283,13 +333,25 @@ export default function CallsTranscriptPage() {
                       </span>
                     </td>
                     <td className="py-4 px-6">
-                      <Link
-                        href={`calls/${call.id}`}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                        title="View Transcript"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Link>
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          href={`calls/${call.id}`}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                          title="View Transcript"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleDeleteClick(call.id);
+                          }}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                          title="Delete Call"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -308,6 +370,70 @@ export default function CallsTranscriptPage() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={handleCancelDelete}
+          ></div>
+          
+          {/* Modal */}
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                Delete Call
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Are you sure you want to delete this call? This action cannot be undone.
+              </p>
+              
+              <div className="flex justify-center gap-3">
+                <button
+                  type="button"
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  onClick={handleCancelDelete}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {error && (
+                <div className="mt-4 text-sm text-red-500">
+                  {error}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Eye, Calendar, Loader2, X } from "lucide-react";
+import { Search, Eye, Calendar, Loader2, X, Trash2 } from "lucide-react";
 import axiosClient from "@/lib/axiosClient";
 
 interface Handoff {
@@ -23,6 +23,9 @@ export default function HumanHandoffPage() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [viewHandoff, setViewHandoff] = useState<Handoff | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedHandoffId, setSelectedHandoffId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({ contactName: "", phoneNumber: "", note: "", callDate: "", callTime: "", duration: "" });
   const [formErrors, setFormErrors] = useState<any>({});
   const [loading, setLoading] = useState(true);
@@ -131,6 +134,59 @@ export default function HumanHandoffPage() {
     }, 1000);
   };
 
+  const handleDeleteClick = (handoffId: string) => {
+    setSelectedHandoffId(handoffId);
+    setViewHandoff(null); // Close the details modal
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedHandoffId) return;
+    
+    try {
+      setIsDeleting(true);
+      setError(null);
+      
+      const tenantId = localStorage.getItem("tenantId");
+      if (!tenantId) {
+        throw new Error("Tenant information not found. Please sign in again.");
+      }
+
+      const response = await axiosClient.delete(`/calls/${tenantId}`, {
+        data: { deleteHandoffs: true, handoffId: selectedHandoffId },
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.status === 200) {
+        // Remove the deleted handoff from the list
+        setHandoffs(prev => prev.filter(h => h.id !== selectedHandoffId));
+        setIsDeleteModalOpen(false);
+        // Show success message
+        console.log("Handoff deleted successfully");
+      } else {
+        throw new Error("Failed to delete handoff");
+      }
+    } catch (err: any) {
+      console.error("Error deleting handoff:", err);
+      setError(
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to delete handoff. Please try again."
+      );
+    } finally {
+      setIsDeleting(false);
+      setSelectedHandoffId(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setIsDeleteModalOpen(false);
+    setSelectedHandoffId(null);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6">
@@ -225,7 +281,15 @@ export default function HumanHandoffPage() {
                         {handoff.status}
                       </span>
                     </td>
-                    <td className="py-4 px-6"><button onClick={() => setViewHandoff(handoff)} className="p-1.5 text-gray-600 hover:text-blue-600"><Eye className="w-4 h-4" /></button></td>
+                    <td className="py-4 px-6">
+                      <button 
+                        onClick={() => setViewHandoff(handoff)} 
+                        className="p-1.5 text-gray-600 hover:text-blue-600 transition-colors"
+                        title="View Details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -318,9 +382,85 @@ export default function HumanHandoffPage() {
                   <div><p className="text-sm text-gray-600 dark:text-gray-400">Status</p><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(viewHandoff.status)}`}>● {viewHandoff.status}</span></div>
                 </div>
               </div>
-              <div className="flex justify-end px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button onClick={() => setViewHandoff(null)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200">Close</button>
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <button 
+                  onClick={() => setViewHandoff(null)} 
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Close
+                </button>
+                <button 
+                  onClick={() => handleDeleteClick(viewHandoff.id)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={handleCancelDelete}
+          ></div>
+          
+          {/* Modal */}
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                Delete Handoff
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Are you sure you want to delete this handoff? This action cannot be undone.
+              </p>
+              
+              <div className="flex justify-center gap-3">
+                <button
+                  type="button"
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  onClick={handleCancelDelete}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {error && (
+                <div className="mt-4 text-sm text-red-500">
+                  {error}
+                </div>
+              )}
             </div>
           </div>
         </div>

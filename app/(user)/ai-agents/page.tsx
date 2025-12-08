@@ -75,7 +75,13 @@ interface FormErrors {
 
 import { getTenantIdOrThrow } from "@/lib/utils";
 
-const VOICE_OPTIONS = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+interface Voice {
+  id: string;
+  name: string;
+  description: string;
+  gender: string;
+  accent: string;
+}
 
 export default function AIAgentPage() {
   const [selectedAgent, setSelectedAgent] = useState<AIAgent | null>(null);
@@ -106,10 +112,25 @@ export default function AIAgentPage() {
   const [twilioConfigs, setTwilioConfigs] = useState<any[]>([]);
   const [llmConfigs, setLlmConfigs] = useState<any[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
   const handleViewDetails = (agent: AIAgent) => {
     setSelectedAgent(agent);
     setDetailsModalOpen(true);
   };
+  const fetchVoices = async () => {
+    try {
+      setLoadingVoices(true);
+      const response = await axiosClient.get('/api/voices');
+      setVoices(response.data.data.voices || []);
+    } catch (error) {
+      console.error("Error loading voices:", error);
+      toast.error("Failed to load voice options");
+    } finally {
+      setLoadingVoices(false);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -129,6 +150,9 @@ export default function AIAgentPage() {
         setFilteredAgents(agentsResponse.data);
         setTwilioConfigs(twilioResponse.data);
         setLlmConfigs(llmResponse.data);
+        
+        // Fetch voices after other data is loaded
+        await fetchVoices();
       } catch (error) {
         console.error("Error loading data:", error);
         toast.error("Failed to load data");
@@ -483,7 +507,7 @@ export default function AIAgentPage() {
             )}
           </div>
 
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               LLM Model <span className="text-red-500">*</span>
             </label>
@@ -516,7 +540,7 @@ export default function AIAgentPage() {
                 Loading LLM models...
               </p>
             )}
-          </div>
+          </div> */}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -525,22 +549,27 @@ export default function AIAgentPage() {
             <select
               value={formData.voice}
               onChange={(e) => handleInputChange("voice", e.target.value)}
-              disabled={submitting}
+              disabled={submitting || loadingVoices}
               className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
                 formErrors.voice
                   ? "border-red-500 focus:ring-red-500"
                   : "border-gray-300 dark:border-gray-600"
               }`}
             >
-              <option value="">Select Voice</option>
-              {VOICE_OPTIONS.map((voice) => (
-                <option key={voice} value={voice}>
-                  {voice.charAt(0).toUpperCase() + voice.slice(1)}
+              <option value="">
+                {loadingVoices ? 'Loading voices...' : 'Select Voice'}
+              </option>
+              {voices.map((voice) => (
+                <option key={voice.id} value={voice.id}>
+                  {voice.name} - {voice.accent}
                 </option>
               ))}
             </select>
             {formErrors.voice && (
               <p className="mt-1 text-sm text-red-500">{formErrors.voice}</p>
+            )}
+            {loadingVoices && (
+              <p className="mt-1 text-xs text-gray-500">Loading voice options...</p>
             )}
           </div>
         </div>

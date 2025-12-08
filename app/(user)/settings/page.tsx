@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Camera, Edit, Trash2, Plus, X, Eye, EyeOff } from "lucide-react";
+import { Camera, Edit, Trash2, Plus, X, Eye, EyeOff, Copy } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import axiosClient from "@/lib/axiosClient";
 import { getTenantId, getTenantIdOrThrow } from "@/lib/utils";
@@ -34,6 +34,25 @@ interface Notification {
   timestamp: number;
 }
 
+interface WebhookConfig {
+  tenantId: string;
+  webhookBaseUrl: string;
+  webhooks: {
+    main_webhook: {
+      url: string;
+      description: string;
+      note: string;
+    };
+  };
+  setup_instructions: {
+    inbound_calls: {
+      primary_webhook: string;
+      instructions: string[];
+    };
+  };
+}
+
+
 export default function UserSettingsPage() {
   const [user, setUser] = useState({
     name: "",
@@ -50,6 +69,7 @@ export default function UserSettingsPage() {
     handOffNumber: "",
     handOffStartTime: "",
     handOffEndTime: "",
+    isRecordingAllowed: false,
   });
 
   const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([]);
@@ -58,7 +78,7 @@ export default function UserSettingsPage() {
   const [llmLoading, setLlmLoading] = useState(false);
   const [twilioLoading, setTwilioLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"llm" | "twilio">("llm");
+  const [activeTab, setActiveTab] = useState<"llm" | "twilio">("twilio");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showLLMModal, setShowLLMModal] = useState(false);
   const [showTwilioModal, setShowTwilioModal] = useState(false);
@@ -74,6 +94,17 @@ export default function UserSettingsPage() {
   const [visibleAccountSids, setVisibleAccountSids] = useState<Set<string>>(
     new Set()
   );
+
+
+
+const [webhookConfig, setWebhookConfig] = useState<WebhookConfig | null>(null);
+const [webhookLoading, setWebhookLoading] = useState(false);
+const [webhookError, setWebhookError] = useState<string | null>(null);
+const [copiedWebhook, setCopiedWebhook] = useState(false);
+
+
+const [savingBasicDetails, setSavingBasicDetails] = useState(false);
+const [savingHandConfig, setSavingHandConfig] = useState(false);
 
   const [llmForm, setLlmForm] = useState<
     Omit<LLMConfig, "id" | "isActive" | "createdAt" | "updatedAt">
@@ -118,8 +149,10 @@ export default function UserSettingsPage() {
 
     fetchTenantProfile();
     fetchTenantDetails();
+    fetchHandOffConfig();
     fetchLLMConfigs();
     fetchTwilioConfigs();
+    fetchWebhookConfig();
   }, []);
 
   const fetchLLMConfigs = async () => {
@@ -160,12 +193,54 @@ export default function UserSettingsPage() {
     return value;
   };
 
+  const fetchWebhookConfig = async () => {
+    try {
+      setWebhookLoading(true);
+      setWebhookError(null);
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/call/${tenantId}/webhook-config`);
+
+      console.log("[Webhook] tenantId used:", tenantId);
+      console.log("[Webhook] raw response:", response.data);
+
+      // Support both plain object and { data: object } wrapper, plus JSON strings
+      let payload: any = response.data?.data ?? response.data;
+
+      if (typeof payload === "string") {
+        try {
+          payload = JSON.parse(payload);
+        } catch (e) {
+          console.error("[Webhook] Failed to parse JSON string payload:", e);
+        }
+      }
+
+      if (payload) {
+        setWebhookConfig(payload as WebhookConfig);
+      } else {
+        console.warn("[Webhook] Empty webhook payload received:", payload);
+        setWebhookConfig(null);
+      }
+    } catch (error) {
+      console.error("Error fetching webhook config:", error);
+      setWebhookError(
+        (error as any)?.response?.data?.message ||
+          (error as any)?.response?.data?.error ||
+          "Failed to fetch webhook configuration"
+      );
+      addNotification("Failed to fetch webhook configuration", "error");
+    } finally {
+      setWebhookLoading(false);
+    }
+  };
+
   const fetchTenantDetails = async () => {
     try {
       const tenantId = getTenantIdOrThrow();
       const response = await axiosClient.get(`/tenant/details-config/${tenantId}`);
       const data = response.data?.data || response.data;
       if (data) {
+        console.log("[TenantDetails] raw response:", data);
+
         setBasicDetails({
           name: data.name || "",
           email: data.email || "",
@@ -183,14 +258,67 @@ export default function UserSettingsPage() {
             localStorage.setItem("tenantEmail", data.email);
           }
         }
-        setHandConfig({
-          handOffNumber: data.handOffNumber || "",
-          handOffStartTime: normalizeTimeValue(data.handOffStartTime),
-          handOffEndTime: normalizeTimeValue(data.handOffEndTime),
-        });
       }
     } catch (error) {
       console.error("Error fetching tenant details:", error);
+    }
+  };
+
+  const fetchHandOffConfig = async () => {
+    try {
+      const tenantId = getTenantIdOrThrow();
+      const response = await axiosClient.get(`/tenant/handoff-config/${tenantId}`);
+      const data = response.data?.data || response.data;
+      if (data) {
+        console.log("[HandOffConfig] raw response:", data);
+
+        const hasHandOffNumberKey =
+          "handOffNumber" in data ||
+          "handoffNumber" in data ||
+          "handoff_number" in data;
+        const hasHandOffStartKey =
+          "handOffStartTime" in data ||
+          "handoffStartTime" in data ||
+          "handoff_start_time" in data;
+        const hasHandOffEndKey =
+          "handOffEndTime" in data ||
+          "handoffEndTime" in data ||
+          "handoff_end_time" in data;
+        const hasRecordingKey =
+          "isRecordingAllowed" in data || "is_recording_allowed" in data;
+
+        const handOffNumberValue =
+          data.handOffNumber ?? data.handoffNumber ?? data.handoff_number ?? "";
+        const handOffStartTimeValue =
+          data.handOffStartTime ??
+          data.handoffStartTime ??
+          data.handoff_start_time ??
+          "";
+        const handOffEndTimeValue =
+          data.handOffEndTime ??
+          data.handoffEndTime ??
+          data.handoff_end_time ??
+          "";
+        const isRecordingAllowedValue =
+          data.isRecordingAllowed ?? data.is_recording_allowed ?? false;
+
+        setHandConfig((prev) => ({
+          handOffNumber: hasHandOffNumberKey
+            ? handOffNumberValue || ""
+            : prev.handOffNumber,
+          handOffStartTime: hasHandOffStartKey
+            ? normalizeTimeValue(handOffStartTimeValue)
+            : prev.handOffStartTime,
+          handOffEndTime: hasHandOffEndKey
+            ? normalizeTimeValue(handOffEndTimeValue)
+            : prev.handOffEndTime,
+          isRecordingAllowed: hasRecordingKey
+            ? Boolean(isRecordingAllowedValue)
+            : prev.isRecordingAllowed,
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching handoff config:", error);
     }
   };
 
@@ -228,7 +356,7 @@ export default function UserSettingsPage() {
 
   const handleHandConfigChange = (
     field: keyof typeof handConfig,
-    value: string
+    value: string | boolean
   ) => {
     setHandConfig((prev) => ({ ...prev, [field]: value }));
   };
@@ -236,36 +364,111 @@ export default function UserSettingsPage() {
   const buildDetailsPayload = () => ({
     name: basicDetails.name.trim(),
     email: basicDetails.email.trim(),
-    handOffNumber: handConfig.handOffNumber.trim(),
-    handOffStartTime: handConfig.handOffStartTime,
-    handOffEndTime: handConfig.handOffEndTime,
   });
 
-  const handleSaveBasicDetails = async () => {
-    if (!basicDetails.name.trim() || !basicDetails.email.trim()) {
-      addNotification("Please provide both company name and email.", "error");
-      return;
-    }
+  const buildHandOffPayload = () => ({
+    handOffNumber: handConfig.handOffNumber.trim(),
+    handoffNumber: handConfig.handOffNumber.trim(),
+    handoff_number: handConfig.handOffNumber.trim(),
 
-    try {
-      const tenantId = getTenantIdOrThrow();
-      await axiosClient.put(
-        `/tenant/details-config/${tenantId}`,
-        buildDetailsPayload()
-      );
-      setUser((prev) => ({
-        ...prev,
-        name: basicDetails.name,
-        email: basicDetails.email,
-      }));
-      addNotification("Basic details updated successfully", "success");
-    } catch (error: any) {
-      console.error("Error updating basic details:", error);
-      const message =
-        error.response?.data?.message || "Failed to update basic details";
-      addNotification(message, "error");
-    }
-  };
+    handOffStartTime: handConfig.handOffStartTime,
+    handoffStartTime: handConfig.handOffStartTime,
+    handoff_start_time: handConfig.handOffStartTime,
+
+    handOffEndTime: handConfig.handOffEndTime,
+    handoffEndTime: handConfig.handOffEndTime,
+    handoff_end_time: handConfig.handOffEndTime,
+
+    isRecordingAllowed: handConfig.isRecordingAllowed,
+    is_recording_allowed: handConfig.isRecordingAllowed,
+  });
+
+  // const handleSaveBasicDetails = async () => {
+  //   if (!basicDetails.name.trim() || !basicDetails.email.trim()) {
+  //     addNotification("Please provide both company name and email.", "error");
+  //     return;
+  //   }
+
+  //   try {
+  //     const tenantId = getTenantIdOrThrow();
+  //     await axiosClient.put(
+  //       `/tenant/details-config/${tenantId}`,
+  //       buildDetailsPayload()
+  //     );
+  //     setUser((prev) => ({
+  //       ...prev,
+  //       name: basicDetails.name,
+  //       email: basicDetails.email,
+  //     }));
+  //     addNotification("Basic details updated successfully", "success");
+  //   } catch (error: any) {
+  //     console.error("Error updating basic details:", error);
+  //     const message =
+  //       error.response?.data?.message || "Failed to update basic details";
+  //     addNotification(message, "error");
+  //   }
+  // };
+
+
+ const handleSaveBasicDetails = async () => {
+  if (!basicDetails.name.trim() || !basicDetails.email.trim()) {
+    addNotification("Please provide both company name and email.", "error");
+    return;
+  }
+
+  try {
+    setSavingBasicDetails(true); // ✅ ADD THIS
+    const tenantId = getTenantIdOrThrow();
+    await axiosClient.put(
+      `/tenant/details-config/${tenantId}`,
+      buildDetailsPayload()
+    );
+    setUser((prev) => ({
+      ...prev,
+      name: basicDetails.name,
+      email: basicDetails.email,
+    }));
+    addNotification("Basic details updated successfully", "success");
+    await fetchTenantDetails();
+  } catch (error: any) {
+    console.error("Error updating basic details:", error);
+    const message =
+      error.response?.data?.message || "Failed to update basic details";
+    addNotification(message, "error");
+  } finally {
+    setSavingBasicDetails(false); // ✅ ADD THIS
+  }
+};
+
+  // const handleSaveHandConfig = async () => {
+  //   if (
+  //     !handConfig.handOffNumber.trim() ||
+  //     !handConfig.handOffStartTime ||
+  //     !handConfig.handOffEndTime
+  //   ) {
+  //     addNotification(
+  //       "Please provide handoff number and both start/end times.",
+  //       "error"
+  //     );
+  //     return;
+  //   }
+
+  //   try {
+  //     const tenantId = getTenantIdOrThrow();
+  //     await axiosClient.put(
+  //       `/tenant/details-config/${tenantId}`,
+  //       buildDetailsPayload()
+  //     );
+  //     addNotification("Hand configuration updated successfully", "success");
+  //   } catch (error: any) {
+  //     console.error("Error updating handoff configuration:", error);
+  //     const message =
+  //       error.response?.data?.message ||
+  //       "Failed to update handoff configuration";
+  //     addNotification(message, "error");
+  //   }
+  // };
+
 
   const handleSaveHandConfig = async () => {
     if (
@@ -281,18 +484,22 @@ export default function UserSettingsPage() {
     }
 
     try {
+      setSavingHandConfig(true);
       const tenantId = getTenantIdOrThrow();
       await axiosClient.put(
-        `/tenant/details-config/${tenantId}`,
-        buildDetailsPayload()
+        `/tenant/handoff-config/${tenantId}`,
+        buildHandOffPayload()
       );
       addNotification("Hand configuration updated successfully", "success");
+      await fetchHandOffConfig();
     } catch (error: any) {
       console.error("Error updating handoff configuration:", error);
       const message =
         error.response?.data?.message ||
         "Failed to update handoff configuration";
       addNotification(message, "error");
+    } finally {
+      setSavingHandConfig(false);
     }
   };
 
@@ -507,6 +714,17 @@ export default function UserSettingsPage() {
 
   const RequiredAsterisk = () => <span className="text-red-500 ml-1">*</span>;
 
+  const handleCopyWebhook = async (url: string) => {
+  try {
+    await navigator.clipboard.writeText(url);
+    setCopiedWebhook(true);
+    addNotification("Webhook URL copied to clipboard!", "success");
+    setTimeout(() => setCopiedWebhook(false), 2000);
+  } catch (error) {
+    addNotification("Failed to copy webhook URL", "error");
+  }
+};
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <DashboardHeader title="Settings Page" />
@@ -565,7 +783,7 @@ export default function UserSettingsPage() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
             Basic Details
           </h3>
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Company Name
@@ -595,11 +813,19 @@ export default function UserSettingsPage() {
           </div>
           <div className="flex justify-end">
             <button
-              onClick={handleSaveBasicDetails}
-              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              Save Changes
-            </button>
+  onClick={handleSaveBasicDetails}
+  disabled={savingBasicDetails}
+  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+>
+  {savingBasicDetails ? (
+    <>
+      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      Saving...
+    </>
+  ) : (
+    "Save Changes"
+  )}
+</button>
           </div>
         </div>
 
@@ -610,10 +836,11 @@ export default function UserSettingsPage() {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                HandOff Number
+                Handoff Number
               </label>
               <input
                 type="text"
+                placeholder="e.g +911234567890"
                 value={handConfig.handOffNumber}
                 onChange={(e) =>
                   handleHandConfigChange("handOffNumber", e.target.value)
@@ -623,7 +850,7 @@ export default function UserSettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                HandOff Start Time
+                Handoff Start Time
               </label>
               <input
                 type="time"
@@ -647,7 +874,7 @@ export default function UserSettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                HandOff End Time
+                Handoff End Time
               </label>
               <input
                 type="time"
@@ -659,13 +886,51 @@ export default function UserSettingsPage() {
               />
             </div>
           </div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Allow recording and transcription
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Enable this to record calls and generate transcriptions.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                handleHandConfigChange(
+                  "isRecordingAllowed",
+                  !handConfig.isRecordingAllowed
+                )
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
+                handConfig.isRecordingAllowed
+                  ? "bg-blue-600"
+                  : "bg-gray-300 dark:bg-gray-600"
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                  handConfig.isRecordingAllowed ? "translate-x-5" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
           <div className="flex justify-end">
             <button
-              onClick={handleSaveHandConfig}
-              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              Save Changes
-            </button>
+  onClick={handleSaveHandConfig}
+  disabled={savingHandConfig}
+  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+>
+  {savingHandConfig ? (
+    <>
+      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      Saving...
+    </>
+  ) : (
+    "Save Changes"
+  )}
+</button>
           </div>
         </div>
 
@@ -675,6 +940,8 @@ export default function UserSettingsPage() {
           </h3>
 
           <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
+            {/** LLM tab hidden for now but kept for future use **/}
+            {/**
             <button
               onClick={() => setActiveTab("llm")}
               className={`pb-3 px-2 font-medium transition-colors ${
@@ -685,6 +952,7 @@ export default function UserSettingsPage() {
             >
               LLM
             </button>
+            **/}
             <button
               onClick={() => setActiveTab("twilio")}
               className={`pb-3 px-2 font-medium transition-colors ${
@@ -697,6 +965,8 @@ export default function UserSettingsPage() {
             </button>
           </div>
 
+          {/** LLM tab content hidden for now but preserved for future use **/}
+          {/**
           {activeTab === "llm" && (
             <div>
               <div className="flex justify-end mb-4">
@@ -806,6 +1076,7 @@ export default function UserSettingsPage() {
               </div>
             </div>
           )}
+          **/}
 
           {activeTab === "twilio" && (
             <div>
@@ -921,7 +1192,79 @@ export default function UserSettingsPage() {
             </div>
           )}
         </div>
+
+        {/* Webhook Configuration Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Webhook Configuration
+          </h3>
+
+          {webhookLoading ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Loading webhook configuration...
+            </p>
+          ) : webhookError ? (
+            <p className="text-sm text-red-500">
+              {webhookError}
+            </p>
+          ) : !webhookConfig ? (
+            <p className="text-sm text-red-500">
+              Webhook configuration not available. Please ensure your account is properly set up.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                  Primary webhook URL
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Unified webhook for both inbound and outbound calls.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs md:text-sm break-all rounded bg-gray-100 dark:bg-gray-900 px-3 py-2 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                    {webhookConfig?.webhooks?.main_webhook?.url ?? ""}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyWebhook(
+                        webhookConfig?.setup_instructions?.inbound_calls
+                          ?.primary_webhook ?? ""
+                      )
+                    }
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Copy className="w-4 h-4" />
+                    {copiedWebhook ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                {webhookConfig?.webhooks?.main_webhook?.note && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {webhookConfig.webhooks.main_webhook.note}
+                  </p>
+                )}
+              </div>
+
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  Inbound call setup instructions
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Follow these steps in your Twilio console to configure inbound calls:
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                  {webhookConfig?.setup_instructions?.inbound_calls?.instructions?.map(
+                    (line, idx) => <li key={idx}>{line}</li>
+                  )}
+                </ol>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+
+      
 
       {showLLMModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -994,13 +1337,11 @@ export default function UserSettingsPage() {
                   </label>
                   <input
                     type="number"
-                    value={llmForm.maxTokens || ""}
+                    value={llmForm.maxTokens === null ? "" : llmForm.maxTokens}
                     onChange={(e) =>
                       setLlmForm({
                         ...llmForm,
-                        maxTokens: e.target.value
-                          ? parseInt(e.target.value)
-                          : null,
+                        maxTokens: e.target.value === "" ? null : parseInt(e.target.value)
                       })
                     }
                     placeholder="e.g., 2000"
@@ -1016,15 +1357,14 @@ export default function UserSettingsPage() {
                     step="0.1"
                     min="0"
                     max="1"
-                    value={llmForm.temperature || ""}
-                    onChange={(e) =>
+                    value={llmForm.temperature === null ? "" : llmForm.temperature}
+                    onChange={(e) => {
+                      const value = e.target.value;
                       setLlmForm({
                         ...llmForm,
-                        temperature: e.target.value
-                          ? parseFloat(e.target.value)
-                          : null,
-                      })
-                    }
+                        temperature: value === "" ? null : parseFloat(value)
+                      });
+                    }}
                     placeholder="e.g., 0.7"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />

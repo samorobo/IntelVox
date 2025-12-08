@@ -171,7 +171,7 @@ export default function UserSignupFlow() {
     setError("");
 
     try {
-      const response = await axiosClient.post("/tenant", {
+      const response = await axiosClient.post("/tenants", {
         name: profile.name,
         email,
         planId: selectedPlan,
@@ -578,15 +578,21 @@ export default function UserSignupFlow() {
             </button>
 
             <div className="mt-4 flex items-center justify-center text-xs text-gray-400">
-              <span
-                className={`mr-2 inline-flex items-center justify-center w-4 h-4 rounded border ${
+              <button
+                type="button"
+                onClick={() => {
+                  setHasScrolledPrivacy(false);
+                  setIsPrivacyModalOpen(true);
+                }}
+                className={`mr-2 inline-flex items-center justify-center w-4 h-4 rounded border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-black ${
                   hasAgreedPrivacy
                     ? "border-blue-500 bg-blue-600"
                     : "border-gray-600 bg-transparent"
                 }`}
+                aria-label="Open privacy policy"
               >
                 {hasAgreedPrivacy && <Check className="w-3 h-3 text-white" />}
-              </span>
+              </button>
               <span>
                 By continuing, you must review and agree to our{" "}
                 <button

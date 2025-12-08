@@ -27,23 +27,23 @@ export default function DashboardPage() {
         const data = response.data?.data || response.data;
 
         setStats([
-          {
-            title: "Total calls",
-            value: data?.totalCalls ?? 0,
-          },
-          {
-            title: "Total Outbound",
-            value: data?.totalOutbound ?? 0,
-          },
-          {
-            title: "Total Inbound",
-            value: data?.totalInbound ?? 0,
-          },
-          {
-            title: "Total HandOffs",
-            value: data?.totalHandoff ?? 0,
-          },
-        ]);
+  {
+    title: "Total calls",
+    value: data?.overview?.totalCalls ?? 0,  // ✅ Add .overview
+  },
+  {
+    title: "Total Outbound",
+    value: data?.overview?.totalOutbound ?? 0,  // ✅ Add .overview
+  },
+  {
+    title: "Total Inbound",
+    value: data?.overview?.totalInbound ?? 0,  // ✅ Add .overview
+  },
+  {
+    title: "Total HandOffs",
+    value: data?.overview?.totalHandoff ?? 0,  // ✅ Add .overview
+  },
+]);
 
         const monthlyData = Array.isArray(data?.monthly)
           ? data.monthly.map(
