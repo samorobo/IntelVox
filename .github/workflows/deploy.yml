@@ -1,88 +1,109 @@
-name: Deploy Frontend (Optimized)
+name: Deploy Frontend (Ultra-Optimized)
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to VPS
+      - name: 🛎️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🧰 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🧹 Clean previous build
+        run: rm -rf .next
+
+      - name: 🧱 Build Next.js (on GitHub, not on VPS!)
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+        run: |
+          echo "NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}" > .env.local
+          npm run build
+
+      - name: 📦 Package deployment bundle
+        run: |
+          mkdir deploy_bundle
+          cp -R .next package.json public next.config.js deploy_bundle/
+          tar -czf deploy.tar.gz deploy_bundle
+
+      - name: 📤 Upload build artifact for deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: deploy.tar.gz
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: 📥 Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+
+      - name: 🚀 Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_SHA: ${{ github.sha }}
-          REPO_NAME: ${{ github.repository }}
+          FRONTEND_DIR: "/var/www/developmentsite.space/intelvox_frontend"
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          timeout: 1800s
-          command_timeout: 1800s
-          envs: GITHUB_TOKEN,GITHUB_SHA,REPO_NAME
+          timeout: 1200s
+          command_timeout: 1200s
           script: |
             set -e
-            echo "🚀 Optimized frontend deployment started..."
+            echo "🚀 Starting ultra-optimized deployment..."
 
             FRONTEND_DIR="/var/www/developmentsite.space/intelvox_frontend"
 
-            echo "🧠 Checking & enabling swap memory (prevents OOM 137)..."
-            if ! grep -q "swapfile" /etc/fstab; then
-              sudo fallocate -l 4G /swapfile
-              sudo chmod 600 /swapfile
-              sudo mkswap /swapfile
-              sudo swapon /swapfile
-              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-              echo "✅ Swap memory enabled (4GB)"
-            else
-              echo "ℹ️ Swap already active"
-            fi
-
-            echo "📁 Cleaning old deployment..."
+            echo "📁 Resetting deployment folder..."
             rm -rf $FRONTEND_DIR
+            mkdir -p $FRONTEND_DIR
 
-            echo "📥 Cloning repository..."
-            git clone https://x-access-token:$GITHUB_TOKEN@github.com/$REPO_NAME.git $FRONTEND_DIR
-            cd $FRONTEND_DIR
-            git checkout $GITHUB_SHA
+            echo "📦 Uploading build artifact..."
+            cat > /tmp/deploy.tar.gz << 'EOF'
+$(base64 -w0 deploy.tar.gz)
+EOF
 
-            echo "⚙️ Setting Node memory limit (fixes heavy Next.js builds)"
-            export NODE_OPTIONS="--max-old-space-size=4096"
+            base64 -d /tmp/deploy.tar.gz > /tmp/deploy.tar.gz.b64
+            tar -xzf /tmp/deploy.tar.gz.b64 -C $FRONTEND_DIR
 
-            echo "⚡ Installing dependencies..."
-            npm install --prefer-offline --no-audit
-
-            echo "🔧 Writing environment variables..."
-            cat > .env.local <<EOF
-            NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
-            EOF
-
-            echo "🏗️ Building Next.js application..."
-            npm run build
+            echo "📝 Writing .env.local"
+            cat > $FRONTEND_DIR/.env.local <<EOF
+NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+EOF
 
             echo "♻ Restarting PM2..."
             pm2 stop intelvox_frontend 2>/dev/null || true
             pm2 delete intelvox_frontend 2>/dev/null || true
 
-            # Silent PM2 start to avoid ssh hanging
-            pm2 start npm --name "intelvox_frontend" \
-              --cwd $FRONTEND_DIR -- start --silent >> /var/log/intelvox_frontend.log 2>&1
-
+            pm2 start "npx serve -s $FRONTEND_DIR" --name intelvox_frontend
             pm2 save
 
-            echo "🔍 Performing health check..."
+            echo "🔍 Health check..."
             sleep 3
-
             for i in {1..10}; do
               if curl -sf http://localhost:3000 >/dev/null; then
                 echo "✅ Deployment successful at $(date)"
                 exit 0
               fi
-              echo "Waiting for app to boot... ($i/10)"
-              sleep 3
+              echo "Waiting for server to boot... ($i/10)"
+              sleep 2
             done
 
             echo "❌ Health check failed"
