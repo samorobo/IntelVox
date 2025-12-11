@@ -25,19 +25,27 @@ jobs:
           envs: GITHUB_TOKEN,GITHUB_SHA,REPO_NAME
           script: |
             set -e
-            echo "🚀 Fast frontend deployment starting..."
+            echo "Fast frontend deployment starting..."
             
-            # Clean up any failed previous deployments
+            # Clean up any old deployments and temporary folders
             rm -rf /var/www/developmentsite.space/intelvox_frontend_new 2>/dev/null || true
+            rm -rf /var/www/developmentsite.space/intelvox_frontend_old 2>/dev/null || true
+            
+            # Stop existing PM2 process before replacing files
+            pm2 stop intelvox_frontend 2>/dev/null || true
+            pm2 delete intelvox_frontend 2>/dev/null || true
+            
+            # Remove existing frontend directory
+            rm -rf /var/www/developmentsite.space/intelvox_frontend 2>/dev/null || true
             
             # Clone fresh code with token authentication
             mkdir -p /var/www/developmentsite.space
             cd /var/www/developmentsite.space
             echo "Cloning repository..."
-            git clone https://x-access-token:$GITHUB_TOKEN@github.com/$REPO_NAME.git intelvox_frontend_new
-            cd intelvox_frontend_new
+            git clone https://x-access-token:$GITHUB_TOKEN@github.com/$REPO_NAME.git intelvox_frontend
+            cd intelvox_frontend
             git checkout $GITHUB_SHA
-            echo "✅ Code cloned successfully"
+            echo "Code cloned successfully"
             
             # Install dependencies and build
             echo "Installing dependencies..."
@@ -50,34 +58,25 @@ jobs:
             
             echo "Building application..."
             npm run build
-            echo "✅ Build completed"
+            echo "Build completed"
             
-            # Atomic swap
-            if [ -d "/var/www/developmentsite.space/intelvox_frontend" ]; then
-              rm -rf /var/www/developmentsite.space/intelvox_frontend_old 2>/dev/null || true
-              mv /var/www/developmentsite.space/intelvox_frontend /var/www/developmentsite.space/intelvox_frontend_old
-            fi
-            mv /var/www/developmentsite.space/intelvox_frontend_new /var/www/developmentsite.space/intelvox_frontend
-            
-            # Restart PM2
-            pm2 stop intelvox_frontend 2>/dev/null || true
-            pm2 delete intelvox_frontend 2>/dev/null || true
+            # Start PM2 process
             pm2 start npm --name "intelvox_frontend" --cwd /var/www/developmentsite.space/intelvox_frontend -- start
             pm2 save
             
             # Health check
-            echo "⏳ Starting health check..."
+            echo "Starting health check..."
             sleep 3
             
             for i in {1..5}; do
               if curl -sf http://localhost:3000 >/dev/null; then
-                echo "✅ Deployment successful in $(date)!"
+                echo "Deployment successful in $(date)!"
                 exit 0
               fi
               echo "Waiting... ($i/5)"
               sleep 4
             done
             
-            echo "❌ Health check failed"
+            echo "Health check failed"
             pm2 logs intelvox_frontend --lines 15
             exit 1
