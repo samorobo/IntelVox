@@ -17,6 +17,7 @@ import {
   Bot,
   Contact,
   UserPlus,
+  BookOpen,
 } from "lucide-react";
 import axiosClient from "@/lib/axiosClient";
 import { getTenantId } from "@/lib/utils";
@@ -35,6 +36,11 @@ const navItems = [
     href: "/ai-agents",
     label: "AI Agents",
     icon: Bot,
+  },
+  {
+    href: "/knowledge-base",
+    label: "Knowledge Base",
+    icon: BookOpen,
   },
   {
     href: "/campaign",
