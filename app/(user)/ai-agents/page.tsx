@@ -60,7 +60,8 @@ interface FormData {
   twilioConfigId: string;
   llmConfigId: string;
   voice: string;
-  knowledgeBase: string;
+  knowledgeBase: string; // Instructions
+  knowledgeBaseId?: string; // Selected KB Entity
 }
 
 interface FormErrors {
@@ -71,6 +72,7 @@ interface FormErrors {
   llmConfigId?: string;
   voice?: string;
   knowledgeBase?: string;
+  knowledgeBaseId?: string;
 }
 
 import { getTenantIdOrThrow } from "@/lib/utils";
@@ -81,6 +83,11 @@ interface Voice {
   description: string;
   gender: string;
   accent: string;
+}
+
+interface KnowledgeBaseResult {
+  id: string;
+  name: string;
 }
 
 export default function AIAgentPage() {
@@ -114,6 +121,11 @@ export default function AIAgentPage() {
   const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [loadingVoices, setLoadingVoices] = useState(false);
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseResult[]>([
+    { id: "1", name: "Product Documentation" },
+    { id: "2", name: "Sales FAQs" },
+    { id: "3", name: "Technical Support" },
+  ]);
   const handleViewDetails = (agent: AIAgent) => {
     setSelectedAgent(agent);
     setDetailsModalOpen(true);
@@ -150,7 +162,7 @@ export default function AIAgentPage() {
         setFilteredAgents(agentsResponse.data);
         setTwilioConfigs(twilioResponse.data);
         setLlmConfigs(llmResponse.data);
-        
+
         // Fetch voices after other data is loaded
         await fetchVoices();
       } catch (error) {
@@ -199,8 +211,7 @@ export default function AIAgentPage() {
       );
 
       toast.success(
-        `Agent ${
-          newStatus === "active" ? "activated" : "deactivated"
+        `Agent ${newStatus === "active" ? "activated" : "deactivated"
         } successfully`
       );
     } catch (err) {
@@ -235,6 +246,7 @@ export default function AIAgentPage() {
         llmConfigId,
         voice: agent.voice,
         knowledgeBase: agent.knowledgeBase,
+        knowledgeBaseId: "", // TODO: map from agent if available
       });
     } else {
       setFormData({
@@ -245,6 +257,7 @@ export default function AIAgentPage() {
         llmConfigId: "",
         voice: "",
         knowledgeBase: "",
+        knowledgeBaseId: "",
       });
     }
     setFormErrors({});
@@ -264,6 +277,7 @@ export default function AIAgentPage() {
         llmConfigId: "",
         voice: "",
         knowledgeBase: "",
+        knowledgeBaseId: "",
       });
       setFormErrors({});
     }
@@ -278,7 +292,7 @@ export default function AIAgentPage() {
     if (!formData.type) errors.type = "Agent type is required";
     if (!formData.twilioConfigId)
       errors.twilioConfigId = "Twilio number is required";
-    if (!formData.llmConfigId) errors.llmConfigId = "LLM Model is required";
+    // if (!formData.llmConfigId) errors.llmConfigId = "LLM Model is required";
     if (!formData.voice) errors.voice = "Voice is required";
 
     setFormErrors(errors);
@@ -410,11 +424,10 @@ export default function AIAgentPage() {
               value={formData.name}
               onChange={(e) => handleInputChange("name", e.target.value)}
               disabled={submitting}
-              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                formErrors.name
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${formErrors.name
+                ? "border-red-500 focus:ring-red-500"
+                : "border-gray-300 dark:border-gray-600"
+                }`}
               placeholder="Enter agent name"
             />
             {formErrors.name && (
@@ -431,11 +444,10 @@ export default function AIAgentPage() {
               onChange={(e) => handleInputChange("persona", e.target.value)}
               disabled={submitting}
               rows={3}
-              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${
-                formErrors.persona
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${formErrors.persona
+                ? "border-red-500 focus:ring-red-500"
+                : "border-gray-300 dark:border-gray-600"
+                }`}
               placeholder="Describe the agent's personality and behavior..."
             />
             {formErrors.persona && (
@@ -451,11 +463,10 @@ export default function AIAgentPage() {
               value={formData.type}
               onChange={(e) => handleInputChange("type", e.target.value)}
               disabled={submitting}
-              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                formErrors.type
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${formErrors.type
+                ? "border-red-500 focus:ring-red-500"
+                : "border-gray-300 dark:border-gray-600"
+                }`}
             >
               <option value="inbound">Inbound Agent</option>
               <option value="outbound">Outbound Agent</option>
@@ -472,6 +483,28 @@ export default function AIAgentPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Knowledge Base
+            </label>
+            <select
+              value={formData.knowledgeBaseId || ""}
+              onChange={(e) => handleInputChange("knowledgeBaseId", e.target.value)}
+              disabled={submitting}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 dark:border-gray-600`}
+            >
+              <option value="">Select Knowledge Base (Optional)</option>
+              {knowledgeBases.map((kb) => (
+                <option key={kb.id} value={kb.id}>
+                  {kb.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Select an existing knowledge base to power this agent.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Twilio Number <span className="text-red-500">*</span>
             </label>
             <select
@@ -480,11 +513,10 @@ export default function AIAgentPage() {
                 handleInputChange("twilioConfigId", e.target.value)
               }
               disabled={submitting || loadingConfigs}
-              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                formErrors.twilioConfigId
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${formErrors.twilioConfigId
+                ? "border-red-500 focus:ring-red-500"
+                : "border-gray-300 dark:border-gray-600"
+                }`}
             >
               <option value="">Select Twilio Number</option>
               {twilioConfigs
@@ -550,11 +582,10 @@ export default function AIAgentPage() {
               value={formData.voice}
               onChange={(e) => handleInputChange("voice", e.target.value)}
               disabled={submitting || loadingVoices}
-              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-                formErrors.voice
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${formErrors.voice
+                ? "border-red-500 focus:ring-red-500"
+                : "border-gray-300 dark:border-gray-600"
+                }`}
             >
               <option value="">
                 {loadingVoices ? 'Loading voices...' : 'Select Voice'}
@@ -579,7 +610,7 @@ export default function AIAgentPage() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Knowledge Base <span className="text-red-500">*</span>
+              Action Flow Prompt <span className="text-red-500">*</span>
             </label>
             <textarea
               value={formData.knowledgeBase}
@@ -588,11 +619,10 @@ export default function AIAgentPage() {
               }
               disabled={submitting}
               rows={8}
-              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${
-                formErrors.knowledgeBase
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${formErrors.knowledgeBase
+                ? "border-red-500 focus:ring-red-500"
+                : "border-gray-300 dark:border-gray-600"
+                }`}
               placeholder="Enter the agent's knowledge base, training data, or specific instructions..."
             />
             {formErrors.knowledgeBase && (
@@ -621,31 +651,28 @@ export default function AIAgentPage() {
             <nav className="flex -mb-px">
               <button
                 onClick={() => setActiveTab("all")}
-                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "all"
-                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                    : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                }`}
+                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${activeTab === "all"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                  }`}
               >
                 All Agents
               </button>
               <button
                 onClick={() => setActiveTab("inbound")}
-                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "inbound"
-                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                    : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                }`}
+                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${activeTab === "inbound"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                  }`}
               >
                 Inbound Agents
               </button>
               <button
                 onClick={() => setActiveTab("outbound")}
-                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "outbound"
-                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                    : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                }`}
+                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${activeTab === "outbound"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                  }`}
               >
                 Outbound Agents
               </button>
@@ -659,8 +686,8 @@ export default function AIAgentPage() {
               {activeTab === "all"
                 ? "All AI Agents"
                 : activeTab === "inbound"
-                ? "Inbound Agents"
-                : "Outbound Agents"}
+                  ? "Inbound Agents"
+                  : "Outbound Agents"}
             </h2>
             <div className="flex items-center gap-4">
               <button
@@ -708,7 +735,7 @@ export default function AIAgentPage() {
                       Type
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hidden lg:table-cell">
-                      LLM Model
+                      Knowledge Base 
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hidden xl:table-cell">
                       Conversations / Retentions
@@ -777,21 +804,19 @@ export default function AIAgentPage() {
                         <button
                           onClick={() => toggleStatus(agent.id)}
                           disabled={statusUpdating === agent.id}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            agent.status === "active"
-                              ? "bg-green-500"
-                              : "bg-gray-300 dark:bg-gray-600"
-                          }`}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${agent.status === "active"
+                            ? "bg-green-500"
+                            : "bg-gray-300 dark:bg-gray-600"
+                            }`}
                         >
                           {statusUpdating === agent.id ? (
                             <Loader2 className="w-2.5 h-2.5 animate-spin text-white absolute left-1" />
                           ) : (
                             <span
-                              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                                agent.status === "active"
-                                  ? "translate-x-5"
-                                  : "translate-x-1"
-                              }`}
+                              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${agent.status === "active"
+                                ? "translate-x-5"
+                                : "translate-x-1"
+                                }`}
                             />
                           )}
                         </button>
@@ -927,5 +952,5 @@ export default function AIAgentPage() {
       />
     </>
   );
-  
+
 }

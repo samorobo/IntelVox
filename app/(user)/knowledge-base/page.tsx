@@ -119,6 +119,23 @@ export default function KnowledgeBasePage() {
     const [isAddingUrl, setIsAddingUrl] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (activeDropdown) {
+                setActiveDropdown(null);
+            }
+        };
+
+        if (activeDropdown) {
+            document.addEventListener('click', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('click', handleClickOutside);
+        };
+    }, [activeDropdown]);
+
     const handleCreateKnowledgeBase = async () => {
         if (!newKnowledgeBaseName.trim()) {
             toast.error("Please enter a knowledge base name");

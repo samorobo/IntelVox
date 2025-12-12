@@ -263,10 +263,10 @@ export default function AgentDetailsModal({
                   <div className="flex items-center gap-2 mb-3">
                     <Cpu className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                     <h4 className="font-semibold text-gray-900 dark:text-white">
-                      AI Model
+                      Knowledge Base
                     </h4>
                   </div>
-                  {agent.llmConfig ? (
+                  {/* {agent.llmConfig ? (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -305,8 +305,11 @@ export default function AgentDetailsModal({
                     <p className="text-sm text-gray-500 dark:text-gray-400 italic">
                       Not configured
                     </p>
-                  )}
+                  )} */}
                 </div>
+
+
+
 
                 {/* <div className="bg-white/80 dark:bg-gray-800/80 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50 shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
@@ -341,7 +344,7 @@ export default function AgentDetailsModal({
               <div className="flex items-center gap-2 mb-3">
                 <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <h4 className="font-semibold text-gray-900 dark:text-white">
-                  Knowledge Base
+                  Action Flow Prompt
                 </h4>
               </div>
               <div className="max-h-40 overflow-y-auto">
